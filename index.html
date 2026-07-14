@@ -46,9 +46,11 @@ const TAU=Math.PI*2;
            their tone in a low drone under everything.
    Frogs : round bass bloop on landing, pitch from the pad's
            Y; soft two-pulse croak when idle.
-   Flies : quick high shimmer arp — sparkle on top.        */
+   Flies : quick high shimmer arp — sparkle on top.
+   Hums  : fast tremolo trill, highest register — a rare
+           treat when the hummingbird visits a flower.     */
 let audioReady=false;
-let fishSynth=null, padSynth=null, frogSynth=null, flySynth=null;
+let fishSynth=null, padSynth=null, frogSynth=null, flySynth=null, humSynth=null;
 
 const SCALE=['D3','E3','F#3','A3','B3','D4','E4','F#4','A4','B4','D5','E5','F#5'];
 function noteFromY(y){
@@ -61,6 +63,7 @@ function bassFromY(y){
   return BASS[i];
 }
 const SPARKLE=['D5','E5','F#5','A5','B5','D6','E6'];
+const TRILL=['D6','E6','F#6','A6','B6'];
 
 async function initAudio(){
   if(audioReady) return;
@@ -101,6 +104,12 @@ async function initAudio(){
     modulationEnvelope:{attack:0.001, decay:0.08, sustain:0, release:0.08}
   }).connect(bus);
   flySynth.volume.value=-16;
+
+  humSynth=new Tone.PolySynth(Tone.Synth,{
+    oscillator:{type:'triangle'},
+    envelope:{attack:0.005, decay:0.09, sustain:0, release:0.12}
+  }).connect(bus);
+  humSynth.volume.value=-14;
 
   // faint ever-present root under the pond
   const baseGain=new Tone.Gain(0.04).connect(bus);
@@ -150,6 +159,13 @@ function flit(){ // single faint sparkle note for idle skims
   if(!flySynth) return;
   flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(0,SPARKLE.length))], 0.15, undefined, 0.12);
 }
+function trill(vel){ // fast tremolo between two adjacent high scale tones
+  if(!humSynth) return;
+  const i=Math.floor(rand(0,TRILL.length-1));
+  const now=Tone.now();
+  for(let k=0;k<8;k++)
+    humSynth.triggerAttackRelease(TRILL[k%2?i+1:i], 0.07, now+k*0.045, vel*(1-k*0.07));
+}
 
 /* ---------- ripples & note glyphs ---------- */
 const ripples=[], notes=[];
@@ -191,12 +207,26 @@ const frogs=[
   {pad:1, jump:null, croak:0, croakT:rand(5,12)},
   {pad:3, jump:null, croak:0, croakT:rand(5,12)}
 ];
+function hopFrog(f, vel){
+  let to; do{ to=Math.floor(rand(0,pads.length)); }while(to===f.pad || frogs.some(o=>o!==f&&o.pad===to));
+  f.jump={from:pads[f.pad], to:pads[to], t:0, vel}; f.pad=to;
+}
 
 /* ---------- dragonflies (skim the surface) ---------- */
 const flies=[];
 for(let i=0;i<2;i++){
   flies.push({ x:rand(0.1,0.9)*W, y:rand(0.1,0.5)*H, tx:rand(0.1,0.9)*W, ty:rand(0.1,0.6)*H,
     dash:0, wing:rand(0,TAU) });
+}
+
+/* ---------- hummingbird (rare visitor) ---------- */
+let hum=null, humTimer=rand(20,40);
+function spawnHum(){
+  const flowers=pads.filter(p=>p.flower);
+  const target=flowers[Math.floor(rand(0,flowers.length))]||pads[0];
+  const fromLeft=target.x<W/2;
+  hum={x:fromLeft?-40:W+40, y:target.y-60, t:0, stay:rand(6,9),
+       dir:fromLeft?1:-1, target, arrived:false, flee:false};
 }
 
 /* ---------- caustic light blobs ---------- */
@@ -220,8 +250,7 @@ cv.addEventListener('pointerdown', async (e)=>{
     if(f.jump) continue;
     const p=pads[f.pad];
     if(Math.hypot(x-p.x, y-(p.y-10)) < 36){
-      let to; do{ to=Math.floor(rand(0,pads.length)); }while(to===f.pad || frogs.some(o=>o!==f&&o.pad===to));
-      f.jump={from:pads[f.pad], to:pads[to], t:0}; f.pad=to;
+      hopFrog(f, 0.7);
       noteGlyph(p.x,p.y-40,'#8fb573');
       return;
     }
@@ -244,6 +273,13 @@ cv.addEventListener('pointerdown', async (e)=>{
       noteGlyph(d.x,d.y-16,'#7fd4c1'); ripple(d.x,d.y,0.4);
       return;
     }
+  }
+  // hummingbird: startle it — bright trill as it flees
+  if(hum && !hum.flee && Math.hypot(x-hum.x,y-hum.y)<44){
+    trill(0.6);
+    noteGlyph(hum.x,hum.y-20,'#c77fd4');
+    hum.flee=true;
+    return;
   }
   // fish
   let best=null, bd=70;
@@ -297,7 +333,7 @@ function drawFrog(f,dt,t){
     const k=Math.min(j.t,1);
     x=j.from.x+(j.to.x-j.from.x)*k; y=j.from.y+(j.to.y-j.from.y)*k - Math.sin(k*Math.PI)*90;
     squash=1+Math.sin(k*Math.PI)*0.25;
-    if(k>=1){ ripple(j.to.x,j.to.y,0.9); bloop(j.to.y,0.7); f.jump=null; }
+    if(k>=1){ ripple(j.to.x,j.to.y,0.9); bloop(j.to.y,j.vel); f.jump=null; }
   } else {
     const p=pads[f.pad]; x=p.x; y=p.y+Math.sin(t*0.7+p.bob)*2-8;
     f.croak-=dt;
@@ -337,6 +373,33 @@ function drawFly(d,dt,t){
   }
   ctx.restore(); ctx.globalAlpha=1;
 }
+function drawHum(h,dt,t){
+  h.t+=dt;
+  const bob=Math.sin(h.t*6)*4;
+  if(h.flee){
+    h.x+=dt*600*(h.x<W/2?-1:1); h.y-=dt*300;
+    if(h.x<-60||h.x>W+60||h.y<-60){ hum=null; return; }
+  } else {
+    const hx=h.target.x-70*h.dir, hy=h.target.y-60;
+    h.x+=(hx-h.x)*Math.min(1,dt*2); h.y+=(hy-h.y)*Math.min(1,dt*2);
+    if(!h.arrived && Math.abs(hx-h.x)<14){
+      h.arrived=true; trill(0.25); noteGlyph(h.x,h.y-20,'#c77fd4');
+    }
+    if(h.t>h.stay) h.flee=true;
+  }
+  ctx.save(); ctx.translate(h.x,h.y+bob); ctx.scale(h.dir,1);
+  const wa=Math.sin(h.t*55);
+  ctx.globalAlpha=0.5; ctx.fillStyle='#d8b4e8';                        // blurred wings
+  ctx.beginPath(); ctx.ellipse(-2,-8+wa*4,14,5,-0.6,0,TAU); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#8a5fb0';
+  ctx.beginPath(); ctx.ellipse(0,0,11,7,0.25,0,TAU); ctx.fill();       // body
+  ctx.fillStyle='#c77fd4';
+  ctx.beginPath(); ctx.arc(9,-4,5,0,TAU); ctx.fill();                  // head
+  ctx.strokeStyle='#2e2038'; ctx.lineWidth=1.8; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(13,-4); ctx.lineTo(24,-2); ctx.stroke(); // beak
+  ctx.restore();
+}
 function drawFish(f,dt,t){
   // wander / dart
   f.wig+=dt*(6+f.dart*14);
@@ -360,7 +423,7 @@ function drawFish(f,dt,t){
 }
 
 /* ---------- main loop ---------- */
-let last=performance.now(), idleT=rand(4,9);
+let last=performance.now(), idleT=rand(4,9), frogIdleT=rand(18,36);
 function frame(now){
   const dt=Math.min((now-last)/1000, 0.05); last=now;
   const t=now/1000;
@@ -383,6 +446,14 @@ function frame(now){
     ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
     pluck(f.y, 0.3);
   }
+  // ...a frog wanders to a new pad on its own (softer bloop)
+  frogIdleT-=dt;
+  if(frogIdleT<0){ frogIdleT=rand(18,36);
+    const f=frogs[Math.floor(rand(0,frogs.length))];
+    if(!f.jump){ hopFrog(f, 0.35); noteGlyph(f.jump.from.x, f.jump.from.y-40, '#8fb573'); }
+  }
+  // ...and the hummingbird pays a rare visit to a flower
+  if(!hum){ humTimer-=dt; if(humTimer<0){ spawnHum(); humTimer=rand(45,90); } }
 
   fish.forEach(f=>drawFish(f,dt,t));
 
@@ -399,6 +470,7 @@ function frame(now){
   pads.forEach(p=>drawPad(p,t));
   frogs.forEach(f=>drawFrog(f,dt,t));
   flies.forEach(d=>drawFly(d,dt,t));
+  if(hum) drawHum(hum,dt,t);
 
   // note glyphs
   ctx.font='20px Georgia, serif';
