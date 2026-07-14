@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pond Chimes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128031;</text></svg>">
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#08161a; }
+  canvas { display:block; width:100vw; height:100vh; touch-action:none; }
+  #title {
+    position:fixed; top:24px; left:50%; transform:translateX(-50%);
+    font-family: Georgia, 'Times New Roman', serif;
+    color:#c9dfd8; text-align:center; pointer-events:none;
+    opacity:1; transition:opacity 2.5s ease;
+  }
+  #title h1 { font-size:28px; font-weight:normal; letter-spacing:0.35em; margin:0; text-transform:uppercase; }
+  #title p { font-size:12px; letter-spacing:0.2em; margin:6px 0 0; opacity:0.55;
+    font-family:'Helvetica Neue', Arial, sans-serif; text-transform:uppercase; }
+</style>
+<script src="vendor/Tone.js"></script>
+</head>
+<body>
+<div id="title"><h1>Pond Chimes</h1><p>tap the pond to wake it</p></div>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+const rand=(a,b)=>a+Math.random()*(b-a);
+const TAU=Math.PI*2;
+
+/* ================= audio =================
+   Key of D, everything pentatonic (D E F# A B) so any
+   combination of taps sounds intentional.
+   Fish  : kalimba-ish FM pluck, pitch from Y at tap time.
+   Lilies: soft chord swell on toggle; open flowers hold
+           their tone in a low drone under everything.   */
+let audioReady=false;
+let fishSynth=null, padSynth=null;
+
+const SCALE=['D3','E3','F#3','A3','B3','D4','E4','F#4','A4','B4','D5','E5','F#5'];
+function noteFromY(y){
+  const i=Math.max(0, Math.min(SCALE.length-1, Math.round((1 - y/H)*(SCALE.length-1))));
+  return SCALE[i];
+}
+
+async function initAudio(){
+  if(audioReady) return;
+  audioReady=true;
+  await Tone.start();
+
+  const limiter=new Tone.Limiter(-3).toDestination();
+  const verb=new Tone.Reverb({decay:6, wet:0.4}).connect(limiter);
+  const bus=new Tone.Gain(0.9).connect(verb);
+
+  fishSynth=new Tone.PolySynth(Tone.FMSynth,{
+    harmonicity:8, modulationIndex:3,
+    oscillator:{type:'sine'},
+    envelope:{attack:0.001, decay:1.3, sustain:0, release:1.3},
+    modulation:{type:'sine'},
+    modulationEnvelope:{attack:0.002, decay:0.2, sustain:0, release:0.2}
+  }).connect(bus);
+  fishSynth.volume.value=-8;
+
+  padSynth=new Tone.PolySynth(Tone.Synth,{
+    oscillator:{type:'triangle'},
+    envelope:{attack:1.2, decay:0.6, sustain:0.5, release:3.5}
+  }).connect(bus);
+  padSynth.volume.value=-16;
+
+  // faint ever-present root under the pond
+  const baseGain=new Tone.Gain(0.04).connect(bus);
+  new Tone.Oscillator('D2','sine').start().connect(baseGain);
+
+  // one drone voice per flower, gain ramps with open/close
+  for(const p of pads){
+    if(!p.flower) continue;
+    const g=new Tone.Gain(p.flower.open?0.1:0).connect(bus);
+    new Tone.Oscillator(p.flower.drone,'sine').start().connect(g);
+    const shimmer=new Tone.Oscillator(p.flower.drone,'triangle').start();
+    shimmer.detune.value=6;
+    shimmer.connect(new Tone.Gain(0.35).connect(g));
+    p.flower.gain=g;
+  }
+}
+
+function pluck(y, vel){
+  if(!fishSynth) return;
+  fishSynth.triggerAttackRelease(noteFromY(y), 0.6, undefined, vel);
+}
+function swell(chord, vel){
+  if(!padSynth) return;
+  padSynth.triggerAttackRelease(chord, 2.5, undefined, vel);
+}
+function setDrone(flower){
+  if(!flower.gain) return;
+  flower.gain.gain.rampTo(flower.open?0.1:0, 2);
+}
+
+/* ---------- ripples & note glyphs ---------- */
+const ripples=[], notes=[];
+function ripple(x,y,big=1){ ripples.push({x,y,r:6,max:90*big,a:0.6}); }
+function noteGlyph(x,y,color){ notes.push({x,y,vy:-0.4,a:1,color,g:Math.random()<0.5?'♪':'♫'}); }
+
+/* ---------- lily pads (static anchors) ---------- */
+const pads=[];
+const PAD_SPOTS=[[0.2,0.28],[0.78,0.22],[0.62,0.62],[0.16,0.72],[0.87,0.78],[0.45,0.15]];
+const FLOWER_VOICES={ // drone tone + swell chord, all inside D pentatonic
+  0:{hue:'#f2d4dc', drone:'D3',  chord:['D4','E4','A4']},
+  2:{hue:'#fdf6ee', drone:'A3',  chord:['A3','D4','F#4']},
+  4:{hue:'#fdf6ee', drone:'F#3', chord:['F#3','B3','E4']}
+};
+function layoutPads(){
+  PAD_SPOTS.forEach((s,i)=>{
+    if(pads[i]){ pads[i].x=s[0]*W; pads[i].y=s[1]*H; return; }
+    const v=FLOWER_VOICES[i];
+    pads.push({
+      x:s[0]*W, y:s[1]*H, r:rand(42,64), rot:rand(0,TAU),
+      notch:rand(0.5,0.9), bob:rand(0,TAU),
+      flower: v ? {open:false, anim:0, hue:v.hue, drone:v.drone, chord:v.chord, gain:null} : null
+    });
+  });
+}
+layoutPads();
+
+/* ---------- fish ---------- */
+const FISH_COLORS=[['#e8956b','#f5e6d3'],['#f5e6d3','#e8956b'],['#d97b52','#f0e0c8'],['#f0ad7e','#fdf6ee']];
+const fish=[];
+for(let i=0;i<6;i++){
+  const c=FISH_COLORS[i%FISH_COLORS.length];
+  fish.push({ x:rand(0.1,0.9)*W, y:rand(0.1,0.9)*H, h:rand(0,TAU),
+    speed:rand(14,22), dart:0, wig:rand(0,TAU), size:rand(16,24), c1:c[0], c2:c[1] });
+}
+
+/* ---------- caustic light blobs ---------- */
+const blobs=[];
+for(let i=0;i<7;i++) blobs.push({x:rand(0,1),y:rand(0,1),r:rand(120,260),p:rand(0,TAU),s:rand(0.05,0.15)});
+
+/* ---------- input ---------- */
+let titleFaded=false;
+function fadeTitle(){
+  if(titleFaded) return; titleFaded=true;
+  document.getElementById('title').style.opacity=0;
+}
+setTimeout(fadeTitle, 12000);
+
+cv.addEventListener('pointerdown', async (e)=>{
+  const x=e.clientX, y=e.clientY;
+  fadeTitle();
+  await initAudio();
+  // flowers first
+  for(const p of pads){
+    if(p.flower && Math.hypot(x-p.x, y-p.y) < p.r*0.55){
+      p.flower.open=!p.flower.open;
+      setDrone(p.flower);
+      swell(p.flower.chord, p.flower.open?0.4:0.25);
+      ripple(p.x,p.y,0.7); noteGlyph(p.x,p.y-30,'#f2d4dc');
+      return;
+    }
+  }
+  // fish
+  let best=null, bd=70;
+  for(const f of fish){ const d=Math.hypot(x-f.x,y-f.y); if(d<bd){bd=d;best=f;} }
+  if(best){
+    best.dart=1; best.h=Math.atan2(best.y-y,best.x-x)+rand(-0.4,0.4);
+    pluck(best.y, 0.7);
+    ripple(x,y,1); noteGlyph(best.x,best.y-14,'#f0ad7e');
+    return;
+  }
+  // bare water: ripple + a very soft note so every touch answers
+  pluck(y, 0.2);
+  ripple(x,y,0.8);
+});
+
+/* ---------- drawing helpers ---------- */
+function drawPad(p,t){
+  const bob=Math.sin(t*0.7+p.bob)*2;
+  ctx.save(); ctx.translate(p.x,p.y+bob); ctx.rotate(p.rot);
+  ctx.fillStyle='#2a4d38';
+  ctx.beginPath(); ctx.moveTo(0,0);
+  ctx.arc(0,0,p.r, p.notch*0.4, TAU - p.notch*0.4); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(61,107,79,0.9)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,p.r*0.72, p.notch*0.4, TAU-p.notch*0.4); ctx.stroke();
+  ctx.restore();
+  if(p.flower){
+    const f=p.flower;
+    f.anim += ((f.open?1:0)-f.anim)*0.08;
+    const o=f.anim, cx=p.x, cy=p.y+bob;
+    ctx.save(); ctx.translate(cx,cy);
+    for(let ring=0; ring<2; ring++){
+      const n=ring===0?8:6, len=(ring===0?26:16)*(0.35+0.65*o);
+      for(let i=0;i<n;i++){
+        const a=(i/n)*TAU + ring*0.4 + t*0.02;
+        ctx.save(); ctx.rotate(a);
+        ctx.fillStyle = ring===0 ? f.hue : '#fdf6ee';
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.ellipse(len*0.6,0,len*0.55,len*0.22*(0.4+0.6*o),0,0,TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = o>0.5 ? '#f5c96b' : '#e8a0b4';
+    ctx.beginPath(); ctx.arc(0,0,6+4*o,0,TAU); ctx.fill();
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+}
+function drawFish(f,dt,t){
+  // wander / dart
+  f.wig+=dt*(6+f.dart*14);
+  if(f.dart>0){ f.dart-=dt*0.9; }
+  const sp=f.speed*(1+f.dart*9);
+  f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
+  f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
+  const m=60;
+  if(f.x<m||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
+  ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.h);
+  ctx.globalAlpha=0.85; ctx.filter='blur(0.6px)';
+  const s=f.size, tw=Math.sin(f.wig)*0.5;
+  ctx.fillStyle=f.c1;
+  ctx.beginPath();                                                    // tail
+  ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4, tw*s*0.8 - s*0.4, -s*1.6, tw*s);
+  ctx.quadraticCurveTo(-s*1.4, tw*s*0.8 + s*0.4, -s*0.7, 0); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();     // body
+  ctx.fillStyle=f.c2;
+  ctx.beginPath(); ctx.ellipse(s*0.25,-s*0.05,s*0.4,s*0.25,0,0,TAU); ctx.fill(); // patch
+  ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+}
+
+/* ---------- main loop ---------- */
+let last=performance.now(), idleT=rand(4,9);
+function frame(now){
+  const dt=Math.min((now-last)/1000, 0.05); last=now;
+  const t=now/1000;
+
+  // water
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0d2226'); g.addColorStop(1,'#08161a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  for(const b of blobs){
+    const bx=(b.x + Math.sin(t*b.s+b.p)*0.06)*W, by=(b.y + Math.cos(t*b.s*1.3+b.p)*0.06)*H;
+    const rg=ctx.createRadialGradient(bx,by,0,bx,by,b.r);
+    rg.addColorStop(0,'rgba(72,140,140,0.05)'); rg.addColorStop(1,'rgba(72,140,140,0)');
+    ctx.fillStyle=rg; ctx.fillRect(bx-b.r,by-b.r,b.r*2,b.r*2);
+  }
+
+  // idle life: a fish surfaces now and then and sings softly
+  idleT-=dt;
+  if(idleT<0){ idleT=rand(4,9);
+    const f=fish[Math.floor(rand(0,fish.length))];
+    ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
+    pluck(f.y, 0.3);
+  }
+
+  fish.forEach(f=>drawFish(f,dt,t));
+
+  // ripples
+  for(let i=ripples.length-1;i>=0;i--){ const r=ripples[i];
+    r.r+=90*dt; r.a-=dt*0.5;
+    if(r.a<=0||r.r>r.max){ ripples.splice(i,1); continue; }
+    ctx.strokeStyle=`rgba(180,225,215,${r.a})`; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,TAU); ctx.stroke();
+    ctx.strokeStyle=`rgba(180,225,215,${r.a*0.4})`;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r*0.65,0,TAU); ctx.stroke();
+  }
+
+  pads.forEach(p=>drawPad(p,t));
+
+  // note glyphs
+  ctx.font='20px Georgia, serif';
+  for(let i=notes.length-1;i>=0;i--){ const n=notes[i];
+    n.y+=n.vy; n.a-=0.012;
+    if(n.a<=0){ notes.splice(i,1); continue; }
+    ctx.globalAlpha=n.a; ctx.fillStyle=n.color; ctx.fillText(n.g,n.x,n.y);
+  }
+  ctx.globalAlpha=1;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('resize', layoutPads);
+</script>
+</body>
+</html>
