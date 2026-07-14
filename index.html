@@ -43,15 +43,24 @@ const TAU=Math.PI*2;
    combination of taps sounds intentional.
    Fish  : kalimba-ish FM pluck, pitch from Y at tap time.
    Lilies: soft chord swell on toggle; open flowers hold
-           their tone in a low drone under everything.   */
+           their tone in a low drone under everything.
+   Frogs : round bass bloop on landing, pitch from the pad's
+           Y; soft two-pulse croak when idle.
+   Flies : quick high shimmer arp — sparkle on top.        */
 let audioReady=false;
-let fishSynth=null, padSynth=null;
+let fishSynth=null, padSynth=null, frogSynth=null, flySynth=null;
 
 const SCALE=['D3','E3','F#3','A3','B3','D4','E4','F#4','A4','B4','D5','E5','F#5'];
 function noteFromY(y){
   const i=Math.max(0, Math.min(SCALE.length-1, Math.round((1 - y/H)*(SCALE.length-1))));
   return SCALE[i];
 }
+const BASS=['D2','E2','F#2','A2','B2'];
+function bassFromY(y){
+  const i=Math.max(0, Math.min(BASS.length-1, Math.round((1 - y/H)*(BASS.length-1))));
+  return BASS[i];
+}
+const SPARKLE=['D5','E5','F#5','A5','B5','D6','E6'];
 
 async function initAudio(){
   if(audioReady) return;
@@ -76,6 +85,22 @@ async function initAudio(){
     envelope:{attack:1.2, decay:0.6, sustain:0.5, release:3.5}
   }).connect(bus);
   padSynth.volume.value=-16;
+
+  frogSynth=new Tone.MembraneSynth({
+    pitchDecay:0.06, octaves:2.5,
+    oscillator:{type:'sine'},
+    envelope:{attack:0.001, decay:0.5, sustain:0.01, release:0.6}
+  }).connect(bus);
+  frogSynth.volume.value=-4;
+
+  flySynth=new Tone.PolySynth(Tone.FMSynth,{
+    harmonicity:12, modulationIndex:4,
+    oscillator:{type:'sine'},
+    envelope:{attack:0.001, decay:0.25, sustain:0, release:0.3},
+    modulation:{type:'sine'},
+    modulationEnvelope:{attack:0.001, decay:0.08, sustain:0, release:0.08}
+  }).connect(bus);
+  flySynth.volume.value=-16;
 
   // faint ever-present root under the pond
   const baseGain=new Tone.Gain(0.04).connect(bus);
@@ -104,6 +129,26 @@ function swell(chord, vel){
 function setDrone(flower){
   if(!flower.gain) return;
   flower.gain.gain.rampTo(flower.open?0.1:0, 2);
+}
+function bloop(y, vel){
+  if(!frogSynth) return;
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.35, undefined, vel);
+}
+function croakSound(y){
+  if(!frogSynth) return;
+  const now=Tone.now();
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.12, now, 0.18);
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.1, now+0.13, 0.12);
+}
+function shimmer(y, vel){
+  if(!flySynth) return;
+  const start=Math.max(0, Math.min(SPARKLE.length-3, Math.round((1 - y/H)*(SPARKLE.length-3))));
+  const now=Tone.now();
+  for(let i=0;i<3;i++) flySynth.triggerAttackRelease(SPARKLE[start+i], 0.18, now+i*0.055, vel*(1-i*0.15));
+}
+function flit(){ // single faint sparkle note for idle skims
+  if(!flySynth) return;
+  flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(0,SPARKLE.length))], 0.15, undefined, 0.12);
 }
 
 /* ---------- ripples & note glyphs ---------- */
@@ -141,6 +186,19 @@ for(let i=0;i<6;i++){
     speed:rand(14,22), dart:0, wig:rand(0,TAU), size:rand(16,24), c1:c[0], c2:c[1] });
 }
 
+/* ---------- frogs (sit on pads, hop on tap) ---------- */
+const frogs=[
+  {pad:1, jump:null, croak:0, croakT:rand(5,12)},
+  {pad:3, jump:null, croak:0, croakT:rand(5,12)}
+];
+
+/* ---------- dragonflies (skim the surface) ---------- */
+const flies=[];
+for(let i=0;i<2;i++){
+  flies.push({ x:rand(0.1,0.9)*W, y:rand(0.1,0.5)*H, tx:rand(0.1,0.9)*W, ty:rand(0.1,0.6)*H,
+    dash:0, wing:rand(0,TAU) });
+}
+
 /* ---------- caustic light blobs ---------- */
 const blobs=[];
 for(let i=0;i<7;i++) blobs.push({x:rand(0,1),y:rand(0,1),r:rand(120,260),p:rand(0,TAU),s:rand(0.05,0.15)});
@@ -157,13 +215,33 @@ cv.addEventListener('pointerdown', async (e)=>{
   const x=e.clientX, y=e.clientY;
   fadeTitle();
   await initAudio();
-  // flowers first
+  // frogs first (they sit on top of pads): hop to a free pad, bloop on splash-down
+  for(const f of frogs){
+    if(f.jump) continue;
+    const p=pads[f.pad];
+    if(Math.hypot(x-p.x, y-(p.y-10)) < 36){
+      let to; do{ to=Math.floor(rand(0,pads.length)); }while(to===f.pad || frogs.some(o=>o!==f&&o.pad===to));
+      f.jump={from:pads[f.pad], to:pads[to], t:0}; f.pad=to;
+      noteGlyph(p.x,p.y-40,'#8fb573');
+      return;
+    }
+  }
+  // flowers
   for(const p of pads){
     if(p.flower && Math.hypot(x-p.x, y-p.y) < p.r*0.55){
       p.flower.open=!p.flower.open;
       setDrone(p.flower);
       swell(p.flower.chord, p.flower.open?0.4:0.25);
       ripple(p.x,p.y,0.7); noteGlyph(p.x,p.y-30,'#f2d4dc');
+      return;
+    }
+  }
+  // dragonflies: dash away with a shimmer arp
+  for(const d of flies){
+    if(Math.hypot(x-d.x,y-d.y)<40){
+      d.dash=1; d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
+      shimmer(d.y, 0.6);
+      noteGlyph(d.x,d.y-16,'#7fd4c1'); ripple(d.x,d.y,0.4);
       return;
     }
   }
@@ -211,6 +289,53 @@ function drawPad(p,t){
     ctx.beginPath(); ctx.arc(0,0,6+4*o,0,TAU); ctx.fill();
     ctx.restore(); ctx.globalAlpha=1;
   }
+}
+function drawFrog(f,dt,t){
+  let x,y,squash=1;
+  if(f.jump){
+    const j=f.jump; j.t+=dt*2.1;
+    const k=Math.min(j.t,1);
+    x=j.from.x+(j.to.x-j.from.x)*k; y=j.from.y+(j.to.y-j.from.y)*k - Math.sin(k*Math.PI)*90;
+    squash=1+Math.sin(k*Math.PI)*0.25;
+    if(k>=1){ ripple(j.to.x,j.to.y,0.9); bloop(j.to.y,0.7); f.jump=null; }
+  } else {
+    const p=pads[f.pad]; x=p.x; y=p.y+Math.sin(t*0.7+p.bob)*2-8;
+    f.croak-=dt;
+    if(f.croak<-f.croakT){ f.croak=1; f.croakT=rand(6,14); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
+  }
+  ctx.save(); ctx.translate(x,y-6); ctx.scale(1/squash, squash);
+  ctx.fillStyle='#5f8a4e';
+  ctx.beginPath(); ctx.ellipse(0,0,16,11,0,0,TAU); ctx.fill();       // body
+  ctx.beginPath(); ctx.ellipse(0,-9,11,8,0,0,TAU); ctx.fill();      // head
+  if(f.croak>0){ ctx.fillStyle='rgba(220,235,200,0.85)';            // throat bubble
+    ctx.beginPath(); ctx.arc(0,-2,8*f.croak,0,TAU); ctx.fill(); }
+  ctx.fillStyle='#dfeccb';
+  ctx.beginPath(); ctx.arc(-6,-14,3.6,0,TAU); ctx.arc(6,-14,3.6,0,TAU); ctx.fill();
+  ctx.fillStyle='#233b1e';
+  ctx.beginPath(); ctx.arc(-6,-14,1.6,0,TAU); ctx.arc(6,-14,1.6,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawFly(d,dt,t){
+  d.wing+=dt*40;
+  const sp = d.dash>0 ? 8 : 2.2; d.dash=Math.max(0,d.dash-dt*1.2);
+  const ease=Math.min(1, dt*60*0.01*sp);
+  d.x+=(d.tx-d.x)*ease; d.y+=(d.ty-d.y)*ease;
+  if(Math.hypot(d.tx-d.x,d.ty-d.y)<20){
+    // occasionally dip to the surface: tiny ripple + one faint sparkle note
+    if(Math.random()<0.3){ ripple(d.x,d.y,0.35); flit(); }
+    d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
+  }
+  const a=Math.atan2(d.ty-d.y,d.tx-d.x);
+  ctx.save(); ctx.translate(d.x,d.y); ctx.rotate(a);
+  ctx.strokeStyle='#7fd4c1'; ctx.lineWidth=2.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(9,0); ctx.stroke();  // body
+  const wa=Math.abs(Math.sin(d.wing));
+  ctx.globalAlpha=0.35+0.35*wa; ctx.fillStyle='#bff0e4';
+  for(const side of [-1,1]){
+    ctx.beginPath(); ctx.ellipse(-2,side*7*wa,11,3.4,side*0.5,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3,side*6*wa,9,3,side*0.4,0,TAU); ctx.fill();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
 }
 function drawFish(f,dt,t){
   // wander / dart
@@ -272,6 +397,8 @@ function frame(now){
   }
 
   pads.forEach(p=>drawPad(p,t));
+  frogs.forEach(f=>drawFrog(f,dt,t));
+  flies.forEach(d=>drawFly(d,dt,t));
 
   // note glyphs
   ctx.font='20px Georgia, serif';
