@@ -714,7 +714,79 @@ const cardinal={
   }
 };
 
-const DISCOVERIES=[fireflies, turtle, heron, ducks, cardinal];
+// Bats — dusk. A few dark shapes flit erratically over the water with faint ticks.
+const bats={
+  id:'bats', name:'Bats', sub:'the last of the dusk',
+  active:false, life:0, pool:[],
+  wants(){ const h=currentHour(); return h>18.2 && h<20.6 && dormantNow<0.5; },
+  start(){ this.active=true; this.life=rand(24,44); this.pool.length=0;
+    for(let i=0;i<3;i++) this.pool.push({ x:rand(0.2,0.9)*W, y:rand(0.14,0.58)*H, tx:rand(0.2,0.9)*W, ty:rand(0.12,0.58)*H, wing:rand(0,TAU), tick:rand(0.5,2) });
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1, this.life/2);
+    for(const b of this.pool){
+      b.wing+=dt*28;
+      const ease=Math.min(1,dt*3);
+      b.x+=(b.tx-b.x)*ease; b.y+=(b.ty-b.y)*ease;
+      if(Math.hypot(b.tx-b.x,b.ty-b.y)<26){ b.tx=rand(0.15,0.92)*W; b.ty=rand(0.1,0.6)*H;
+        b.tick-=1; if(b.tick<0){ b.tick=rand(1,3); if(humSynth) humSynth.triggerAttackRelease('E6',0.05,undefined,0.05); } }
+      const ang=Math.atan2(b.ty-b.y,b.tx-b.x), wf=Math.abs(Math.sin(b.wing))*0.75+0.25;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang); ctx.globalAlpha=0.82*fade;
+      ctx.fillStyle='#242030';
+      ctx.beginPath(); ctx.ellipse(0,0,3.5,2,0,0,TAU); ctx.fill();     // body
+      const sp=3+8*wf;
+      for(const s of [-1,1]){                                          // scalloped wings
+        ctx.beginPath(); ctx.moveTo(-1,0);
+        ctx.quadraticCurveTo(-7,s*sp,-14,s*sp*0.7);
+        ctx.lineTo(-10,s*sp*0.3);
+        ctx.quadraticCurveTo(-8,s*sp*0.5,-5,s*1.5);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+};
+
+// Rainbow koi — a patience reward: surfaces only after the pond's run a long
+// while, drifting and leaping with a warm chord. (A non-weather trigger.)
+let uptime=0;
+const koi={
+  id:'koi', name:'Rainbow koi', sub:'a long wait, rewarded',
+  active:false, x:0, y:0, h:0, wig:0, life:0, hue:0, leapT:0, leap:0,
+  wants(){ return uptime>240 && dormantNow<0.9; },
+  start(){ this.active=true; this.life=rand(28,50); this.x=rand(0.3,0.7)*W; this.y=rand(0.35,0.75)*H;
+    this.h=rand(0,TAU); this.wig=0; this.leapT=rand(6,12); this.leap=0; uptime=0;
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.wig+=dt*4; this.hue=(t*36)%360;
+    const sp=26;
+    this.h += Math.sin(t*0.4+this.wig*0.1)*0.02 + rand(-0.02,0.02);
+    this.x+=Math.cos(this.h)*sp*dt; this.y+=Math.sin(this.h)*sp*dt;
+    const m=W*0.18; if(this.x<m||this.x>W-40||this.y<40||this.y>H-40){ this.h=Math.atan2(H/2-this.y,W/2-this.x)+rand(-0.5,0.5); }
+    this.leapT-=dt; if(this.leap>0) this.leap-=dt*1.2;
+    if(this.leapT<0 && this.leap<=0){ this.leapT=rand(8,16); this.leap=1; ripple(this.x,this.y,1.2);
+      if(fishSynth) fishSynth.triggerAttackRelease(['D4','F#4','A4'],0.8,undefined,0.4); }
+    const lift=Math.sin(Math.max(0,this.leap)*Math.PI)*24;
+    ctx.save(); ctx.translate(this.x,this.y-lift); ctx.rotate(this.h);
+    const s=36, tw=Math.sin(this.wig)*0.5;
+    const grd=ctx.createLinearGradient(-s,0,s,0);
+    grd.addColorStop(0,`hsl(${this.hue%360},70%,70%)`);
+    grd.addColorStop(0.5,`hsl(${(this.hue+70)%360},75%,72%)`);
+    grd.addColorStop(1,`hsl(${(this.hue+150)%360},70%,66%)`);
+    ctx.globalAlpha=0.92; ctx.filter='blur(0.5px)'; ctx.fillStyle=grd;
+    ctx.beginPath();                                                   // tail
+    ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4,tw*s*0.8-s*0.4,-s*1.6,tw*s);
+    ctx.quadraticCurveTo(-s*1.4,tw*s*0.8+s*0.4,-s*0.7,0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();    // body
+    ctx.fillStyle='rgba(255,255,255,0.55)';                            // pale koi patch
+    ctx.beginPath(); ctx.ellipse(s*0.2,-s*0.05,s*0.34,s*0.2,0,0,TAU); ctx.fill();
+    ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+  }
+};
+
+const DISCOVERIES=[fireflies, turtle, heron, ducks, cardinal, bats, koi];
 let discoScan=12, cycleIdx=0, holdTimer=0;
 function activateDisc(d, forced){
   if(d.active){ showCard(d.name,d.sub); return; }        // already out → just replay the card
@@ -723,6 +795,7 @@ function activateDisc(d, forced){
 }
 function summonNext(){ const d=DISCOVERIES[cycleIdx%DISCOVERIES.length]; cycleIdx++; activateDisc(d,true); }
 function updateDiscoveries(dt,t){
+  uptime+=dt;
   discoScan-=dt;                                          // once in a while, if a condition is met, one may appear
   if(discoScan<0){ discoScan=rand(12,26);
     for(const d of DISCOVERIES){ if(!d.active && d.wants() && Math.random()<0.5){ activateDisc(d,false); break; } }
