@@ -281,7 +281,7 @@ const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand
      3) browser geolocation         (prompts once; needs https)
    If none resolve, weather simply stays off.                               */
 const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
-const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, loaded:false };
+const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false };
 
 function resolveLocation(cb){
   const q = new URLSearchParams(location.search);
@@ -301,7 +301,7 @@ async function fetchWeather(){
   try{
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + weather.lat +
       '&longitude=' + weather.lon +
-      '&current=precipitation,snowfall,cloud_cover,wind_speed_10m';
+      '&current=temperature_2m,precipitation,snowfall,cloud_cover,wind_speed_10m';
     const r = await fetch(url);
     if(!r.ok) return;
     const c = (await r.json()).current || {};
@@ -309,6 +309,7 @@ async function fetchWeather(){
     weather.precip = +c.precipitation  || 0;   // mm
     weather.snow   = +c.snowfall       || 0;   // cm
     weather.wind   = +c.wind_speed_10m || 0;   // km/h
+    weather.temp   = (c.temperature_2m==null ? null : +c.temperature_2m); // °C
     weather.loaded = true;
   }catch(e){ /* offline / blocked: stay on the plain day-night sky */ }
 }
@@ -362,13 +363,50 @@ function seasonNow(){
 }
 // shared each frame so the draw helpers can read the season without threading it through
 // dormantNow: 0 = pads & frogs fully present, 1 = died back / hibernating under deep ice
-let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false;
+// heatNow: 0 = mild, 1 = hot day (fish seek the rocks' shade)
+let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false, heatNow=0;
 // drifting foliage — leaves in autumn, blossom petals in spring
 const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
 // a little school of fry that appears in spring and fades out by summer
 const babies=[]; for(let i=0;i<8;i++) babies.push({x:rand(0.2,0.8)*W, y:rand(0.2,0.8)*H, h:rand(0,TAU), sp:rand(7,12), wig:rand(0,TAU), dart:0, size:rand(4.5,7)});
 // fixed crack lines etched into the winter ice (pre-baked so they don't shimmer)
 const iceCracks=[]; for(let i=0;i<5;i++){ const pts=[]; let px=rand(0,1),py=rand(0,1), n=Math.floor(rand(3,6)); for(let k=0;k<n;k++){ pts.push([px,py]); px+=rand(-0.22,0.22); py+=rand(-0.22,0.22); } iceCracks.push(pts); }
+
+/* ---------- rocks (two corner clusters) --------------------------------
+   Little stony outcrops tucked into two corners — big rocks, a few medium
+   ones and a scatter of pebbles — like the real pond's edges. Each cluster
+   throws shade on the water that the fish drift into on a hot day (see the
+   heat-seeking in drawFish). Rocks are permanent: they poke up through the
+   winter ice and are drawn over the fish so a fish can tuck in behind one.  */
+const ROCK_TONES=[
+  {hi:'#4c5f68', lo:'#26343b'}, {hi:'#57646d', lo:'#2b343b'},
+  {hi:'#445760', lo:'#212c31'}, {hi:'#50606a', lo:'#28343a'}
+];
+const ROCK_CLUSTERS=[ {cx:0.10, cy:0.86}, {cx:0.90, cy:0.14} ]; // bottom-left & top-right corners
+const rocks=[], shadeSpots=[];
+// each cluster: a couple of large rocks, some medium, a scatter of pebbles
+const ROCK_SPEC=[['L',36],['L',27],['M',19],['M',16],['M',13],['P',7],['P',6],['P',5.5],['P',5],['P',4.5],['P',4]];
+(function buildRocks(){
+  for(const c of ROCK_CLUSTERS){
+    for(const [k,sz] of ROCK_SPEC){
+      const spread = k==='L'?34 : k==='M'?52 : 66;
+      const n=Math.floor(rand(7,10)), verts=[];
+      for(let i=0;i<n;i++) verts.push(rand(0.74,1.0));
+      rocks.push({ cx:c.cx, cy:c.cy, ox:rand(-spread,spread), oy:rand(-spread,spread)*0.8,
+        r:sz*rand(0.9,1.15), ry:rand(0.6,0.78), rot:rand(0,TAU),
+        verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
+    }
+    shadeSpots.push({ cx:c.cx, cy:c.cy, r:98, x:0, y:0 });
+  }
+})();
+function layoutRocks(){
+  for(const rk of rocks){ rk.x=rk.cx*W+rk.ox; rk.y=rk.cy*H+rk.oy; }
+  for(const s of shadeSpots){                         // pull the shade a touch toward open water
+    const a=Math.atan2(H/2-s.cy*H, W/2-s.cx*W);
+    s.x=s.cx*W+Math.cos(a)*34; s.y=s.cy*H+Math.sin(a)*34;
+  }
+}
+layoutRocks();
 
 /* ---------- input ---------- */
 let titleFaded=false;
@@ -440,6 +478,25 @@ cv.addEventListener('pointerdown', async (e)=>{
 });
 
 /* ---------- drawing helpers ---------- */
+function drawRock(rk){
+  ctx.save(); ctx.translate(rk.x,rk.y); ctx.rotate(rk.rot);
+  // contact shadow where the rock meets the water
+  ctx.fillStyle='rgba(3,10,14,0.28)';
+  ctx.beginPath(); ctx.ellipse(0,rk.r*rk.ry*0.5,rk.r*1.05,rk.r*rk.ry*0.5,0,0,TAU); ctx.fill();
+  // stony body, moonlit lighter along the top
+  ctx.beginPath();
+  const n=rk.verts.length;
+  for(let i=0;i<n;i++){ const a=i/n*TAU, rr=rk.verts[i];
+    const px=Math.cos(a)*rk.r*rr, py=Math.sin(a)*rk.r*rr*rk.ry;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+  }
+  ctx.closePath();
+  const gr=ctx.createLinearGradient(0,-rk.r*rk.ry,0,rk.r*rk.ry);
+  gr.addColorStop(0,rk.tone.hi); gr.addColorStop(1,rk.tone.lo);
+  ctx.fillStyle=gr; ctx.fill();
+  ctx.strokeStyle='rgba(150,175,188,0.14)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+}
 function drawPad(p,t){
   if(dormantNow>=0.999) return;           // died back for the winter
   const vis=1-dormantNow;
@@ -559,7 +616,21 @@ function drawFish(f,dt,t){
   // wander / dart
   f.wig+=dt*(6+f.dart*14)*(1-iceNow*0.6);
   if(f.dart>0){ f.dart-=dt*0.9; }
-  const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72);   // fish go sluggish under winter ice
+  // on a hot day, drift toward the nearest rock shade and loiter in the cool
+  let inShade=false;
+  if(heatNow>0.06 && f.dart<=0){
+    let best=null,bd=1e9;
+    for(const s of shadeSpots){ const d2=Math.hypot(s.x-f.x,s.y-f.y); if(d2<bd){bd=d2;best=s;} }
+    if(best){
+      inShade = bd < best.r*0.9;
+      if(!inShade){
+        const des=Math.atan2(best.y-f.y,best.x-f.x);
+        const diff=Math.atan2(Math.sin(des-f.h),Math.cos(des-f.h));
+        f.h += diff*Math.min(1, heatNow*dt*1.7);   // gentle pull, stronger when hotter
+      }
+    }
+  }
+  const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72)*(inShade?0.4:1);   // sluggish under ice; loiter in shade
   f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
   f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
   const m=60;
@@ -609,6 +680,9 @@ function frame(now){
     sky.top=sky.top.map((v,i)=>v+(season.tint[i]-v)*ta);
     sky.bot=sky.bot.map((v,i)=>v+(season.tint[i]-v)*ta*0.7);
   }
+  // how hot is it? live temperature leads; a warm summer daytime also counts
+  const tempHeat = weather.temp!=null ? Math.max(0,Math.min(1,(weather.temp-24)/12)) : 0;
+  heatNow = Math.max(tempHeat, warmthNow*(1-(sky.night||0))*0.55);
   const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
   const g=ctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,rgb(sky.top)); g.addColorStop(1,rgb(sky.bot));
@@ -675,6 +749,16 @@ function frame(now){
   // ...and the hummingbird pays a rare visit to a flower (only when there are flowers)
   if(!hum){ humTimer-=dt; if(humTimer<0){ if(dormantNow<0.5) spawnHum(); humTimer=rand(45,90); } }
 
+  // shade the rocks throw on the water (deeper by day) — the fish rest here when it's hot
+  {
+    const dayShade=0.10+0.16*(1-(sky.night||0));
+    for(const s of shadeSpots){
+      const rg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
+      rg.addColorStop(0,`rgba(4,14,18,${dayShade})`); rg.addColorStop(1,'rgba(4,14,18,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.78,0,0,TAU); ctx.fill();
+    }
+  }
+
   fish.forEach(f=>drawFish(f,dt,t));
 
   // baby fish — a little school of fry schooling near the surface in spring
@@ -735,6 +819,9 @@ function frame(now){
   flies.forEach(d=>drawFly(d,dt,t));
   if(hum) drawHum(hum,dt,t);
 
+  // rocks last (over the fish, so a fish can slip in behind a rock)
+  rocks.forEach(drawRock);
+
   // note glyphs
   ctx.font='20px Georgia, serif';
   for(let i=notes.length-1;i>=0;i--){ const n=notes[i];
@@ -791,6 +878,7 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 window.addEventListener('resize', layoutPads);
+window.addEventListener('resize', layoutRocks);
 </script>
 </body>
 </html>
