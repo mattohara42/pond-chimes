@@ -23,7 +23,14 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 - **Weather** — if a location is available, the pond quietly pulls current conditions and lets the real sky bleed in: cloud cover greys the water and hides the sun and stars, rain stipples the surface with dimples, wind roughens it and stirs the fish, and snow drifts down. It's a soft overlay on the day/night sky, not a mode switch. Silent by design — weather only touches the visuals.
 - **Seasons** — the pond also drifts through the year on the real calendar date. A gentle tint warms or cools the water, the lily pads take on the season's colour (fresh green in spring, lush in summer, olive-brown in autumn, dull in winter), blossom petals fall in spring and leaves in autumn, and the cold quiets the dragonflies and frogs. In spring a little school of **baby fish** appears among the adults (tap near them and they scatter). As winter closes in the pond winds down for the season: the lily pads die back, the frogs settle in to hibernate, and the dragonflies vanish — until only the fish are left, drifting slow and dim beneath a translucent **sheet of ice** that freezes over the surface. Everything eases back to life as it warms. Hemisphere-aware and always gradual, so the pond's identity holds year-round.
 
-- **Discoveries** — rare creatures the pond reveals only under the right real-world conditions, each with its own voice. **Fireflies** drift and blink on a warm summer night; a **painted turtle** climbs the shore rocks to bask on a hot day. The first time you see one, a soft "field guide" card fades its name in (remembered afterwards, so it stays special). More will join the roster over time.
+- **Discoveries** — rare creatures the pond reveals only under the right real-world conditions, each with its own voice:
+  - **Fireflies** drift and blink on a warm summer night.
+  - A **painted turtle** climbs the shore rocks to bask on a hot day.
+  - A **great blue heron** glides in at dawn and stands stock-still (the fish scatter when it lands and lifts off), with a lonely flute call.
+  - A **mallard** paddles across on an overcast or rainy day, dabbling and leaving a wake.
+  - A **cardinal** — a bright red spot on a cold winter day, perching on the shore and whistling.
+
+  The first time you see one, a soft "field guide" card fades its name in (remembered afterwards, so it stays special). More will keep joining the roster.
 
 Audio starts on the first tap (browser autoplay rules); until then the pond is silent but alive.
 
@@ -53,7 +60,7 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 **M7** — pond layout & flow: lily pads spread across the right side (staggered, low overlap, several flowering); a left-side stony shore (a bed of small stones with big boulders on top, uneven and wrapping a little along the bottom) that casts shade the fish loiter in on a hot day (live temperature); tall, varied wide-leaf water plants along the shore and a few in the open water; and a gentle top-left-waterfall → bottom-right-pump current that the caustics and drifting foliage ride. Adds real pond-edge character.
 
-**M8 (in progress)** — discoveries: rare creatures revealed by real-world conditions (fireflies on a warm summer night, a painted turtle basking on a hot day), with a first-sighting "field guide" card remembered in `localStorage`. A hidden press-and-hold on the shore summons and cycles them on demand for testing / re-showing. Framework built to make adding more (heron, ducks, …) easy.
+**M8 (in progress)** — discoveries: rare creatures revealed by real-world conditions, each with its own voice — fireflies (warm summer night), a basking painted turtle (hot day), a great blue heron (dawn), a mallard (overcast/rain) and a cardinal (winter day) — with a first-sighting "field guide" card remembered in `localStorage`. A hidden press-and-hold on the shore summons and cycles them on demand for testing / re-showing. The registry makes adding more easy.
 
 Deferred: feeding mechanic, more discoveries, settings UI, optional weather/season sound.
 

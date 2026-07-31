@@ -611,7 +611,110 @@ const turtle={
   }
 };
 
-const DISCOVERIES=[fireflies, turtle];
+// send nearby fish darting away from a point (heron landing / taking off)
+function scatterFish(fx,r){ for(const f of fish){ if(Math.abs(f.x-fx)<r){ f.dart=1; f.h=Math.atan2((f.y-H/2)*0.3, f.x-fx)+rand(-0.3,0.3); } } }
+
+// Great blue heron — a still dawn. Glides in, stands motionless, then lifts away.
+const heron={
+  id:'heron', name:'Great blue heron', sub:'a still dawn',
+  active:false, x:0, y:0, fy:0, state:'in', timer:0,
+  wants(){ const h=currentHour(); return h>5 && h<7.6 && dormantNow<0.6; },
+  start(){ this.active=true; this.x=rand(0.24,0.42)*W; this.fy=rand(0.52,0.72)*H;
+    this.y=-120; this.state='in'; this.timer=rand(26,60);
+    scatterFish(this.x,150); if(padSynth) padSynth.triggerAttackRelease('D3',1.6,undefined,0.3);
+  },
+  update(dt,t){
+    if(this.state==='in'){ this.y+=(this.fy-this.y)*Math.min(1,dt*1.1); if(this.fy-this.y<3) this.state='stand'; }
+    else if(this.state==='stand'){ this.timer-=dt; if(this.timer<0){ this.state='out'; scatterFish(this.x,160); if(padSynth) padSynth.triggerAttackRelease('A3',1.2,undefined,0.26); } }
+    else { this.y-=150*dt; this.x-=42*dt; if(this.y<-150){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    ctx.save(); ctx.translate(this.x,this.y); ctx.lineCap='round';
+    ctx.strokeStyle='#556b76'; ctx.lineWidth=2.2;                       // legs
+    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-4,-42); ctx.moveTo(5,0); ctx.lineTo(3,-42); ctx.stroke();
+    ctx.fillStyle='rgba(90,116,128,0.7)';                               // tail
+    ctx.beginPath(); ctx.moveTo(-16,-54); ctx.lineTo(-34,-49); ctx.lineTo(-16,-46); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#6b828f';                                            // body
+    ctx.beginPath(); ctx.ellipse(0,-53,22,12,-0.12,0,TAU); ctx.fill();
+    ctx.fillStyle='#5c747f';                                            // wing
+    ctx.beginPath(); ctx.ellipse(-3,-51,15,8,-0.1,0,TAU); ctx.fill();
+    ctx.strokeStyle='#6b828f'; ctx.lineWidth=6;                         // S-neck
+    ctx.beginPath(); ctx.moveTo(12,-59); ctx.quadraticCurveTo(22,-72,13,-84); ctx.quadraticCurveTo(9,-90,18,-94); ctx.stroke();
+    ctx.fillStyle='#6b828f'; ctx.beginPath(); ctx.ellipse(19,-95,6,5,0,0,TAU); ctx.fill(); // head
+    ctx.strokeStyle='#3f5158'; ctx.lineWidth=1.4;                       // crest plume
+    ctx.beginPath(); ctx.moveTo(16,-98); ctx.lineTo(8,-103); ctx.stroke();
+    ctx.fillStyle='#caa24e';                                            // beak
+    ctx.beginPath(); ctx.moveTo(24,-97); ctx.lineTo(40,-94); ctx.lineTo(24,-92); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+};
+
+// Mallard — an overcast or rainy day. Glides across with a wake, dabbles, drifts off.
+const ducks={
+  id:'ducks', name:'Mallard', sub:'an overcast afternoon',
+  active:false, x:0, y:0, tx:0, dir:-1, state:'in', timer:0, wake:0, tip:0,
+  wants(){ return ((weather.cloud||0)>66 || (weather.precip||0)>0.1) && dormantNow<0.7 && nightNow<0.6; },
+  start(){ this.active=true; const fromRight=Math.random()<0.7;
+    this.dir=fromRight?-1:1; this.x=fromRight?W+30:-30; this.y=rand(0.4,0.72)*H;
+    this.tx=fromRight?rand(0.3,0.45)*W:rand(0.55,0.7)*W; this.state='in'; this.timer=rand(16,34); this.wake=0; this.tip=0;
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state==='in'){
+      this.x+=(this.tx-this.x)*Math.min(1,dt*0.4);
+      if(this.wake<0){ this.wake=0.5; ripple(this.x-this.dir*16, this.y+2, 0.3); }
+      if(Math.abs(this.x-this.tx)<8) this.state='dabble';
+    } else if(this.state==='dabble'){ this.timer-=dt; this.tip=Math.max(0,this.tip-dt*2);
+      if(Math.random()<dt*0.5){ this.tip=1; ripple(this.x+this.dir*14,this.y+2,0.35); if(fishSynth) fishSynth.triggerAttackRelease('D3',0.3,undefined,0.13); }
+      if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-40:W+40; }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.5); if(this.x<-30||this.x>W+30){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    const tip=this.tip||0;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir,1); ctx.rotate(tip*0.5);
+    ctx.fillStyle='#8b959b'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // body
+    ctx.fillStyle='#7a5a3e'; ctx.beginPath(); ctx.ellipse(11,1,7,6,0,0,TAU); ctx.fill();       // breast
+    ctx.strokeStyle='#3a3f42'; ctx.lineWidth=2.5; ctx.lineCap='round';                          // tail curl
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();
+    if(tip<0.3){
+      ctx.fillStyle='#2f6a49'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();   // green head
+      ctx.fillStyle='#eef2ee'; ctx.fillRect(11,-4,7,2);                                          // neck ring
+      ctx.fillStyle='#dcae3f'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();  // bill
+      ctx.fillStyle='#12201a'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill();             // eye
+    }
+    ctx.restore();
+  }
+};
+
+// Cardinal — a bright red spot on a cold winter day. Perches on the shore, whistles, flits.
+const cardinal={
+  id:'cardinal', name:'Cardinal', sub:'a bright spot on a winter day',
+  active:false, x:0, y:0, hopTimer:0, sing:0, life:0,
+  wants(){ return iceNow>0.25 && nightNow<0.4; },
+  perch(){ const yf=rand(0.2,0.85); this.x=groundRightAt(yf)+rand(-2,10); this.y=yf*H-6; },
+  start(){ this.active=true; this.life=rand(26,50); this.perch(); this.hopTimer=rand(4,8); this.sing=rand(1,3); },
+  whistle(){ if(!humSynth) return; const now=Tone.now(), ns=['B6','A6','F#6','E6'];
+    for(let i=0;i<4;i++) humSynth.triggerAttackRelease(ns[i],0.12,now+i*0.09,0.16*(1-i*0.12)); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.sing-=dt;
+    if(this.sing<0){ this.sing=rand(3,7); this.whistle(); }
+    if(this.hopTimer<0){ this.hopTimer=rand(4,9); this.perch(); }
+    const bob=Math.sin(t*3)*1.2;
+    ctx.save(); ctx.translate(this.x,this.y+bob);
+    ctx.fillStyle='#a3241f'; ctx.beginPath(); ctx.moveTo(-4,4); ctx.lineTo(-16,14); ctx.lineTo(-8,6); ctx.closePath(); ctx.fill(); // tail
+    ctx.fillStyle='#c62f2a'; ctx.beginPath(); ctx.ellipse(0,0,10,11,0,0,TAU); ctx.fill();                                          // body
+    ctx.beginPath(); ctx.moveTo(2,-9); ctx.lineTo(8,-18); ctx.lineTo(6,-8); ctx.closePath(); ctx.fill();                            // crest
+    ctx.fillStyle='#1c1513'; ctx.beginPath(); ctx.ellipse(7,-3,4,4,0,0,TAU); ctx.fill();                                           // face mask
+    ctx.fillStyle='#e8913a'; ctx.beginPath(); ctx.moveTo(9,-3); ctx.lineTo(15,-2); ctx.lineTo(9,-1); ctx.closePath(); ctx.fill();   // bill
+    ctx.fillStyle='#22120f'; ctx.beginPath(); ctx.arc(7,-5,0.9,0,TAU); ctx.fill();                                                 // eye
+    ctx.restore();
+  }
+};
+
+const DISCOVERIES=[fireflies, turtle, heron, ducks, cardinal];
 let discoScan=12, cycleIdx=0, holdTimer=0;
 function activateDisc(d, forced){
   if(d.active){ showCard(d.name,d.sub); return; }        // already out → just replay the card
