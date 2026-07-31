@@ -329,15 +329,15 @@ let rainAcc=0, chopAcc=0;
    months. All modifiers sit near "neutral summer", so the pond's identity
    holds year-round.                                                        */
 const SEASON=[
-  {m:0.0,  warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.12, petals:0.00, leaf:[168,176,196]}, // deep winter
-  {m:2.5,  warmth:0.18, tint:[120,175,175], tintA:0.06, pad:[44,92,66],  fall:0.00, petals:0.12, leaf:[160,196,158]}, // late winter
-  {m:3.8,  warmth:0.55, tint:[150,205,160], tintA:0.08, pad:[52,120,78], fall:0.00, petals:0.85, leaf:[244,202,214]}, // spring bloom
-  {m:5.8,  warmth:0.92, tint:[212,205,150], tintA:0.05, pad:[46,104,62], fall:0.00, petals:0.10, leaf:[120,170,110]}, // early summer
-  {m:6.8,  warmth:1.00, tint:[230,210,150], tintA:0.05, pad:[42,95,58],  fall:0.00, petals:0.00, leaf:[120,170,110]}, // high summer
-  {m:8.6,  warmth:0.60, tint:[222,182,120], tintA:0.06, pad:[74,102,52], fall:0.32, petals:0.00, leaf:[222,150,80]},  // early autumn
-  {m:9.6,  warmth:0.35, tint:[230,160,90],  tintA:0.10, pad:[94,88,46],  fall:0.90, petals:0.00, leaf:[224,120,60]},  // peak autumn
-  {m:10.6, warmth:0.15, tint:[200,150,110], tintA:0.09, pad:[82,72,48],  fall:0.55, petals:0.00, leaf:[190,110,70]},  // late autumn
-  {m:11.5, warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.15, petals:0.00, leaf:[168,176,196]}  // winter
+  {m:0.0,  warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.12, petals:0.00, leaf:[168,176,196], ice:0.85, young:0.00}, // deep winter
+  {m:2.5,  warmth:0.18, tint:[120,175,175], tintA:0.06, pad:[44,92,66],  fall:0.00, petals:0.12, leaf:[160,196,158], ice:0.25, young:0.15}, // late winter
+  {m:3.8,  warmth:0.55, tint:[150,205,160], tintA:0.08, pad:[52,120,78], fall:0.00, petals:0.85, leaf:[244,202,214], ice:0.00, young:1.00}, // spring bloom
+  {m:5.8,  warmth:0.92, tint:[212,205,150], tintA:0.05, pad:[46,104,62], fall:0.00, petals:0.10, leaf:[120,170,110], ice:0.00, young:0.30}, // early summer
+  {m:6.8,  warmth:1.00, tint:[230,210,150], tintA:0.05, pad:[42,95,58],  fall:0.00, petals:0.00, leaf:[120,170,110], ice:0.00, young:0.00}, // high summer
+  {m:8.6,  warmth:0.60, tint:[222,182,120], tintA:0.06, pad:[74,102,52], fall:0.32, petals:0.00, leaf:[222,150,80],  ice:0.00, young:0.00}, // early autumn
+  {m:9.6,  warmth:0.35, tint:[230,160,90],  tintA:0.10, pad:[94,88,46],  fall:0.90, petals:0.00, leaf:[224,120,60],  ice:0.00, young:0.00}, // peak autumn
+  {m:10.6, warmth:0.15, tint:[200,150,110], tintA:0.09, pad:[82,72,48],  fall:0.55, petals:0.00, leaf:[190,110,70],  ice:0.12, young:0.00}, // late autumn
+  {m:11.5, warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.15, petals:0.00, leaf:[168,176,196], ice:0.80, young:0.00}  // winter
 ];
 function currentMonth(){
   const d=new Date(), doy=(d - new Date(d.getFullYear(),0,1))/86400000;
@@ -351,7 +351,7 @@ function seasonAt(m){
   return {
     warmth:lerp(a.warmth,b.warmth,t), tint:lerpArr(a.tint,b.tint,t), tintA:lerp(a.tintA,b.tintA,t),
     pad:lerpArr(a.pad,b.pad,t), fall:lerp(a.fall,b.fall,t), petals:lerp(a.petals,b.petals,t),
-    leaf:lerpArr(a.leaf,b.leaf,t)
+    leaf:lerpArr(a.leaf,b.leaf,t), ice:lerp(a.ice,b.ice,t), young:lerp(a.young,b.young,t)
   };
 }
 function seasonNow(){
@@ -361,9 +361,13 @@ function seasonNow(){
   return seasonAt(m);
 }
 // shared each frame so the draw helpers can read the season without threading it through
-let season=seasonAt(6.8), warmthNow=1;
+let season=seasonAt(6.8), warmthNow=1, iceNow=0;
 // drifting foliage — leaves in autumn, blossom petals in spring
 const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
+// a little school of fry that appears in spring and fades out by summer
+const babies=[]; for(let i=0;i<8;i++) babies.push({x:rand(0.2,0.8)*W, y:rand(0.2,0.8)*H, h:rand(0,TAU), sp:rand(7,12), wig:rand(0,TAU), dart:0, size:rand(4.5,7)});
+// fixed crack lines etched into the winter ice (pre-baked so they don't shimmer)
+const iceCracks=[]; for(let i=0;i<5;i++){ const pts=[]; let px=rand(0,1),py=rand(0,1), n=Math.floor(rand(3,6)); for(let k=0;k<n;k++){ pts.push([px,py]); px+=rand(-0.22,0.22); py+=rand(-0.22,0.22); } iceCracks.push(pts); }
 
 /* ---------- input ---------- */
 let titleFaded=false;
@@ -377,6 +381,10 @@ cv.addEventListener('pointerdown', async (e)=>{
   const x=e.clientX, y=e.clientY;
   fadeTitle();
   await initAudio();
+  // baby fish scatter away from any tap (side-effect; doesn't consume the tap)
+  if(season.young>0.02) for(const b of babies){
+    if(Math.hypot(x-b.x,y-b.y)<64){ b.dart=1; b.h=Math.atan2(b.y-y,b.x-x)+rand(-0.4,0.4); }
+  }
   // frogs first (they sit on top of pads): hop to a free pad, bloop on splash-down
   for(const f of frogs){
     if(f.jump) continue;
@@ -536,15 +544,15 @@ function drawHum(h,dt,t){
 }
 function drawFish(f,dt,t){
   // wander / dart
-  f.wig+=dt*(6+f.dart*14);
+  f.wig+=dt*(6+f.dart*14)*(1-iceNow*0.6);
   if(f.dart>0){ f.dart-=dt*0.9; }
-  const sp=f.speed*(1+f.dart*9);
+  const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72);   // fish go sluggish under winter ice
   f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
   f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
   const m=60;
   if(f.x<m||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
   ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.h);
-  ctx.globalAlpha=0.85; ctx.filter='blur(0.6px)';
+  ctx.globalAlpha=0.85*(1-iceNow*0.3); ctx.filter='blur(0.6px)';   // dimmer, seen through the ice
   const s=f.size, tw=Math.sin(f.wig)*0.5;
   ctx.fillStyle=f.c1;
   ctx.beginPath();                                                    // tail
@@ -565,7 +573,7 @@ function frame(now){
   // water — colour driven by the real local time of day (moonlit-range cycle)
   const H24=currentHour();
   const sky=skyAt(H24);
-  season=seasonNow(); warmthNow=season.warmth;   // refresh the season for every draw helper
+  season=seasonNow(); warmthNow=season.warmth; iceNow=season.ice;   // refresh the season for every draw helper
   // outdoor cloud cover greys & flattens the water and hides sun + stars
   const cloud=(weather.cloud||0)/100;
   if(cloud>0.01){
@@ -627,12 +635,15 @@ function frame(now){
     while(chopAcc>=1){ chopAcc--; ripples.push({x:rand(0,W),y:rand(0,H),r:2,max:rand(14,26),a:0.14}); }
   }
 
-  // idle life: a fish surfaces now and then and sings softly (livelier in wind)
+  // idle life: a fish surfaces now and then and sings softly (livelier in wind,
+  // but it can't break the surface through solid winter ice)
   idleT-=dt;
   if(idleT<0){ idleT=rand(4,9)*(1-Math.min(wind/60,0.45));
-    const f=fish[Math.floor(rand(0,fish.length))];
-    ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
-    pluck(f.y, 0.3);
+    if(Math.random()>=iceNow){
+      const f=fish[Math.floor(rand(0,fish.length))];
+      ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
+      pluck(f.y, 0.3);
+    }
   }
   // ...a frog wanders to a new pad on its own (softer bloop)
   frogIdleT-=dt;
@@ -645,6 +656,25 @@ function frame(now){
 
   fish.forEach(f=>drawFish(f,dt,t));
 
+  // baby fish — a little school of fry schooling near the surface in spring
+  if(season.young>0.02){
+    const yFade=Math.min(1, season.young*1.4), shown=Math.max(1, Math.ceil(season.young*babies.length));
+    for(let i=0;i<shown;i++){ const b=babies[i];
+      b.wig+=dt*(9+b.dart*16); if(b.dart>0) b.dart-=dt*0.9;
+      const bsp=b.sp*(1+b.dart*8);
+      b.h += Math.sin(t*0.5+b.wig*0.1)*0.02 + rand(-0.03,0.03);
+      b.x += Math.cos(b.h)*bsp*dt; b.y += Math.sin(b.h)*bsp*dt;
+      const bm=40; if(b.x<bm||b.x>W-bm||b.y<bm||b.y>H-bm){ b.h=Math.atan2(H/2-b.y,W/2-b.x)+rand(-0.5,0.5); }
+      const s=b.size, tw=Math.sin(b.wig)*0.5;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.h);
+      ctx.globalAlpha=0.85*yFade; ctx.fillStyle='#ecc39a';
+      ctx.beginPath(); ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.3,tw*s*0.7-s*0.3,-s*1.5,tw*s);
+      ctx.quadraticCurveTo(-s*1.3,tw*s*0.7+s*0.3,-s*0.7,0); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0,0,s,s*0.45,0,0,TAU); ctx.fill();
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+
   // ripples
   for(let i=ripples.length-1;i>=0;i--){ const r=ripples[i];
     r.r+=90*dt; r.a-=dt*0.5;
@@ -653,6 +683,30 @@ function frame(now){
     ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,TAU); ctx.stroke();
     ctx.strokeStyle=`rgba(${sky.rip[0]|0},${sky.rip[1]|0},${sky.rip[2]|0},${r.a*0.4})`;
     ctx.beginPath(); ctx.arc(r.x,r.y,r.r*0.65,0,TAU); ctx.stroke();
+  }
+
+  // winter ice — a translucent sheet at the surface. Fish are drawn *under* it
+  // (above), so they show through faintly; pads, frogs and flies sit on top.
+  if(iceNow>0.02){
+    ctx.save();
+    ctx.globalAlpha=Math.min(0.55, iceNow*0.6);
+    const ig=ctx.createLinearGradient(0,0,W,H);
+    ig.addColorStop(0,'#cdd9e0'); ig.addColorStop(0.5,'#dce7ed'); ig.addColorStop(1,'#c6d3db');
+    ctx.fillStyle=ig; ctx.fillRect(0,0,W,H);
+    // frosted blotches
+    ctx.globalAlpha=Math.min(0.45, iceNow*0.5);
+    for(const bl of blobs){ const bx=bl.x*W, by=bl.y*H;
+      const rg=ctx.createRadialGradient(bx,by,0,bx,by,bl.r*0.85);
+      rg.addColorStop(0,'rgba(255,255,255,0.55)'); rg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=rg; ctx.fillRect(bx-bl.r,by-bl.r,bl.r*2,bl.r*2);
+    }
+    // cracks
+    ctx.globalAlpha=Math.min(0.6, iceNow*0.7); ctx.strokeStyle='rgba(242,249,253,0.8)'; ctx.lineWidth=1.2; ctx.lineJoin='round';
+    for(const cr of iceCracks){ ctx.beginPath();
+      cr.forEach((p,k)=>{ const X=((p[0]%1)+1)%1*W, Y=((p[1]%1)+1)%1*H; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+      ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha=1;
   }
 
   pads.forEach(p=>drawPad(p,t));

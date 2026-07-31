@@ -17,7 +17,7 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 - **Idle mode** — left alone, fish surface and sing, frogs croak and occasionally wander to a new pad, dragonflies dip, and the hummingbird drops by. The pond self-plays as gentle ambient background.
 - **Day/night** — the water colour follows the real local clock. It keeps its moonlit identity: deep teal-black at night with faint star reflections, brightening only to a soft overcast teal by day, with a warm low-sun rake across the surface at dawn and dusk. No network needed — it reads the device clock, so it works offline.
 - **Weather** — if a location is available, the pond quietly pulls current conditions and lets the real sky bleed in: cloud cover greys the water and hides the sun and stars, rain stipples the surface with dimples, wind roughens it and stirs the fish, and snow drifts down. It's a soft overlay on the day/night sky, not a mode switch. Silent by design — weather only touches the visuals.
-- **Seasons** — the pond also drifts through the year on the real calendar date. A gentle tint warms or cools the water, the lily pads take on the season's colour (fresh green in spring, lush in summer, olive-brown in autumn, dull in winter), blossom petals fall in spring and leaves in autumn, and the cold quiets the dragonflies and frogs. Hemisphere-aware and always subtle, so the pond's identity holds year-round.
+- **Seasons** — the pond also drifts through the year on the real calendar date. A gentle tint warms or cools the water, the lily pads take on the season's colour (fresh green in spring, lush in summer, olive-brown in autumn, dull in winter), blossom petals fall in spring and leaves in autumn, and the cold quiets the dragonflies and frogs. In spring a little school of **baby fish** appears among the adults (tap near them and they scatter). In deep winter a translucent **sheet of ice** freezes over the pond — the fish drift slow and dim beneath it, while the pads and frogs sit on top. Hemisphere-aware and always subtle, so the pond's identity holds year-round.
 
 Audio starts on the first tap (browser autoplay rules); until then the pond is silent but alive.
 
@@ -39,7 +39,7 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 **M5** — live outdoor weather (cloud cover, rain, wind, snow) via Open-Meteo (no API key), overlaid on the day/night sky and degrading gracefully to time-of-day only when there's no location or network.
 
-**M6** — seasons on the real calendar date (hemisphere-aware): seasonal water tint, lily-pad colour, drifting spring petals / autumn leaves, and cold-quieted dragonflies and frogs. Completes the "pond mirrors the world outside" trio with day/night and weather.
+**M6** — seasons on the real calendar date (hemisphere-aware): seasonal water tint, lily-pad colour, drifting spring petals / autumn leaves, cold-quieted dragonflies and frogs, a spring school of baby fish, and a winter ice sheet with the fish drifting slow beneath it. Completes the "pond mirrors the world outside" trio with day/night and weather.
 
 Deferred: feeding mechanic, creature unlocks, settings UI, optional weather/season sound.
 
