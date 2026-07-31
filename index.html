@@ -361,7 +361,8 @@ function seasonNow(){
   return seasonAt(m);
 }
 // shared each frame so the draw helpers can read the season without threading it through
-let season=seasonAt(6.8), warmthNow=1, iceNow=0;
+// dormantNow: 0 = pads & frogs fully present, 1 = died back / hibernating under deep ice
+let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false;
 // drifting foliage — leaves in autumn, blossom petals in spring
 const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
 // a little school of fry that appears in spring and fades out by summer
@@ -385,29 +386,32 @@ cv.addEventListener('pointerdown', async (e)=>{
   if(season.young>0.02) for(const b of babies){
     if(Math.hypot(x-b.x,y-b.y)<64){ b.dart=1; b.h=Math.atan2(b.y-y,b.x-x)+rand(-0.4,0.4); }
   }
-  // frogs first (they sit on top of pads): hop to a free pad, bloop on splash-down
-  for(const f of frogs){
-    if(f.jump) continue;
-    const p=pads[f.pad];
-    if(Math.hypot(x-p.x, y-(p.y-10)) < 36){
-      hopFrog(f, 0.7);
-      noteGlyph(p.x,p.y-40,'#8fb573');
-      return;
+  // pads & frogs are only here outside winter dormancy
+  if(dormantNow<0.5){
+    // frogs first (they sit on top of pads): hop to a free pad, bloop on splash-down
+    for(const f of frogs){
+      if(f.jump) continue;
+      const p=pads[f.pad];
+      if(Math.hypot(x-p.x, y-(p.y-10)) < 36){
+        hopFrog(f, 0.7);
+        noteGlyph(p.x,p.y-40,'#8fb573');
+        return;
+      }
+    }
+    // flowers
+    for(const p of pads){
+      if(p.flower && Math.hypot(x-p.x, y-p.y) < p.r*0.55){
+        p.flower.open=!p.flower.open;
+        setDrone(p.flower);
+        swell(p.flower.chord, p.flower.open?0.4:0.25);
+        ripple(p.x,p.y,0.7); noteGlyph(p.x,p.y-30,'#f2d4dc');
+        return;
+      }
     }
   }
-  // flowers
-  for(const p of pads){
-    if(p.flower && Math.hypot(x-p.x, y-p.y) < p.r*0.55){
-      p.flower.open=!p.flower.open;
-      setDrone(p.flower);
-      swell(p.flower.chord, p.flower.open?0.4:0.25);
-      ripple(p.x,p.y,0.7); noteGlyph(p.x,p.y-30,'#f2d4dc');
-      return;
-    }
-  }
-  // dragonflies: dash away with a shimmer arp
+  // dragonflies: dash away with a shimmer arp (gone once winter sets in)
   for(const d of flies){
-    if(Math.hypot(x-d.x,y-d.y)<40){
+    if(dormantNow<0.5 && Math.hypot(x-d.x,y-d.y)<40){
       d.dash=1; d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
       shimmer(d.y, 0.6);
       noteGlyph(d.x,d.y-16,'#7fd4c1'); ripple(d.x,d.y,0.4);
@@ -437,8 +441,11 @@ cv.addEventListener('pointerdown', async (e)=>{
 
 /* ---------- drawing helpers ---------- */
 function drawPad(p,t){
+  if(dormantNow>=0.999) return;           // died back for the winter
+  const vis=1-dormantNow;
   const bob=Math.sin(t*0.7+p.bob)*2;
   ctx.save(); ctx.translate(p.x,p.y+bob); ctx.rotate(p.rot);
+  ctx.globalAlpha=vis;
   const pc=season.pad;
   ctx.fillStyle=`rgb(${pc[0]|0},${pc[1]|0},${pc[2]|0})`;
   ctx.beginPath(); ctx.moveTo(0,0);
@@ -457,7 +464,7 @@ function drawPad(p,t){
         const a=(i/n)*TAU + ring*0.4 + t*0.02;
         ctx.save(); ctx.rotate(a);
         ctx.fillStyle = ring===0 ? f.hue : '#fdf6ee';
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.9*vis;
         ctx.beginPath(); ctx.ellipse(len*0.6,0,len*0.55,len*0.22*(0.4+0.6*o),0,0,TAU); ctx.fill();
         ctx.restore();
       }
@@ -468,6 +475,8 @@ function drawPad(p,t){
   }
 }
 function drawFrog(f,dt,t){
+  if(dormantNow>=0.999) return;           // hibernating on the pond floor
+  const fvis=1-dormantNow;
   let x,y,squash=1;
   if(f.jump){
     const j=f.jump; j.t+=dt*2.1;
@@ -478,9 +487,10 @@ function drawFrog(f,dt,t){
   } else {
     const p=pads[f.pad]; x=p.x; y=p.y+Math.sin(t*0.7+p.bob)*2-8;
     f.croak-=dt;
-    if(f.croak<-f.croakT){ f.croak=1; f.croakT=rand(6,14)/(0.2+0.8*warmthNow); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
+    if(f.croak<-f.croakT && dormantNow<0.4){ f.croak=1; f.croakT=rand(6,14)/(0.2+0.8*warmthNow); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
   }
   ctx.save(); ctx.translate(x,y-6); ctx.scale(1/squash, squash);
+  ctx.globalAlpha=fvis;
   ctx.fillStyle='#5f8a4e';
   ctx.beginPath(); ctx.ellipse(0,0,16,11,0,0,TAU); ctx.fill();       // body
   ctx.beginPath(); ctx.ellipse(0,-9,11,8,0,0,TAU); ctx.fill();      // head
@@ -493,6 +503,8 @@ function drawFrog(f,dt,t){
   ctx.restore();
 }
 function drawFly(d,dt,t){
+  if(dormantNow>=0.999) return;           // adult dragonflies are gone for the winter
+  const dvis=1-dormantNow;
   d.wing+=dt*40;
   const sp = d.dash>0 ? 8 : 2.2; d.dash=Math.max(0,d.dash-dt*1.2);
   const ease=Math.min(1, dt*60*0.01*sp);
@@ -505,10 +517,11 @@ function drawFly(d,dt,t){
   }
   const a=Math.atan2(d.ty-d.y,d.tx-d.x);
   ctx.save(); ctx.translate(d.x,d.y); ctx.rotate(a);
+  ctx.globalAlpha=dvis;
   ctx.strokeStyle='#7fd4c1'; ctx.lineWidth=2.4; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(9,0); ctx.stroke();  // body
   const wa=Math.abs(Math.sin(d.wing));
-  ctx.globalAlpha=0.35+0.35*wa; ctx.fillStyle='#bff0e4';
+  ctx.globalAlpha=(0.35+0.35*wa)*dvis; ctx.fillStyle='#bff0e4';
   for(const side of [-1,1]){
     ctx.beginPath(); ctx.ellipse(-2,side*7*wa,11,3.4,side*0.5,0,TAU); ctx.fill();
     ctx.beginPath(); ctx.ellipse(3,side*6*wa,9,3,side*0.4,0,TAU); ctx.fill();
@@ -574,6 +587,12 @@ function frame(now){
   const H24=currentHour();
   const sky=skyAt(H24);
   season=seasonNow(); warmthNow=season.warmth; iceNow=season.ice;   // refresh the season for every draw helper
+  // deep ice sends the lily pads into dieback and the frogs into hibernation
+  dormantNow=Math.max(0, Math.min(1, (iceNow-0.15)/0.5));
+  const nowDormant=dormantNow>0.5;
+  if(nowDormant!==wasDormant){ wasDormant=nowDormant;   // silence / restore open-flower drones across the transition
+    for(const p of pads){ if(p.flower && p.flower.gain) p.flower.gain.gain.rampTo((p.flower.open && !nowDormant)?0.1:0, 3); }
+  }
   // outdoor cloud cover greys & flattens the water and hides sun + stars
   const cloud=(weather.cloud||0)/100;
   if(cloud>0.01){
@@ -645,14 +664,16 @@ function frame(now){
       pluck(f.y, 0.3);
     }
   }
-  // ...a frog wanders to a new pad on its own (softer bloop)
+  // ...a frog wanders to a new pad on its own (softer bloop) — not while hibernating
   frogIdleT-=dt;
   if(frogIdleT<0){ frogIdleT=rand(18,36);
-    const f=frogs[Math.floor(rand(0,frogs.length))];
-    if(!f.jump){ hopFrog(f, 0.35); noteGlyph(f.jump.from.x, f.jump.from.y-40, '#8fb573'); }
+    if(dormantNow<0.5){
+      const f=frogs[Math.floor(rand(0,frogs.length))];
+      if(!f.jump){ hopFrog(f, 0.35); noteGlyph(f.jump.from.x, f.jump.from.y-40, '#8fb573'); }
+    }
   }
-  // ...and the hummingbird pays a rare visit to a flower
-  if(!hum){ humTimer-=dt; if(humTimer<0){ spawnHum(); humTimer=rand(45,90); } }
+  // ...and the hummingbird pays a rare visit to a flower (only when there are flowers)
+  if(!hum){ humTimer-=dt; if(humTimer<0){ if(dormantNow<0.5) spawnHum(); humTimer=rand(45,90); } }
 
   fish.forEach(f=>drawFish(f,dt,t));
 
