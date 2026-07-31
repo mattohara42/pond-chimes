@@ -233,6 +233,40 @@ function spawnHum(){
 const blobs=[];
 for(let i=0;i<7;i++) blobs.push({x:rand(0,1),y:rand(0,1),r:rand(120,260),p:rand(0,TAU),s:rand(0.05,0.15)});
 
+/* ---------- day / night sky (real local clock, moonlit range) ----------
+   The pond keeps its cool, moonlit identity: days brighten only to a soft
+   overcast teal, dawn & dusk get a warm low-sun rake across the water, and
+   nights go deep with faint star reflections. The palette is interpolated
+   from these anchor hours; the water, caustics and ripples all read their
+   colour from here so the whole scene drifts through the day on its own.   */
+const SKY=[
+  {h:0,   top:[13,34,38],  bot:[8,22,26],   blob:[72,140,140], blobA:0.04, rip:[150,200,195], glow:[20,40,60],   glowA:0.00, night:1.00},
+  {h:5,   top:[20,44,54],  bot:[10,28,36],  blob:[80,150,150], blobA:0.05, rip:[160,205,200], glow:[70,62,84],   glowA:0.05, night:0.70},
+  {h:6.5, top:[46,72,80],  bot:[26,48,56],  blob:[120,165,150],blobA:0.07, rip:[200,215,205], glow:[214,150,108],glowA:0.11, night:0.12},
+  {h:9,   top:[52,104,110],bot:[28,62,72],  blob:[130,185,185],blobA:0.10, rip:[200,230,225], glow:[120,150,150],glowA:0.03, night:0.00},
+  {h:13,  top:[62,120,126],bot:[32,74,84],  blob:[140,195,195],blobA:0.12, rip:[210,238,232], glow:[150,175,170],glowA:0.02, night:0.00},
+  {h:16,  top:[54,106,112],bot:[28,64,74],  blob:[130,185,182],blobA:0.10, rip:[205,232,226], glow:[140,160,155],glowA:0.02, night:0.00},
+  {h:18.5,top:[48,74,82],  bot:[34,46,54],  blob:[120,160,150],blobA:0.07, rip:[205,205,195], glow:[224,140,92], glowA:0.13, night:0.14},
+  {h:20.5,top:[24,50,58],  bot:[14,34,42],  blob:[85,150,148], blobA:0.05, rip:[170,208,202], glow:[80,60,80],   glowA:0.05, night:0.55},
+  {h:22.5,top:[16,38,44],  bot:[10,26,32],  blob:[75,142,142], blobA:0.04, rip:[155,202,196], glow:[30,45,65],   glowA:0.00, night:0.90}
+];
+function currentHour(){ const d=new Date(); return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600; }
+const lerp=(a,b,t)=>a+(b-a)*t;
+const lerpArr=(a,b,t)=>a.map((v,i)=>lerp(v,b[i],t));
+function skyAt(H){
+  let i=0; while(i<SKY.length && SKY[i].h<=H) i++;
+  const b=SKY[i%SKY.length], a=SKY[(i-1+SKY.length)%SKY.length];
+  let span=(((b.h-a.h)%24)+24)%24; if(span===0) span=24;
+  const t=((((H-a.h)%24)+24)%24)/span;
+  return {
+    top:lerpArr(a.top,b.top,t),   bot:lerpArr(a.bot,b.bot,t),
+    blob:lerpArr(a.blob,b.blob,t), blobA:lerp(a.blobA,b.blobA,t),
+    rip:lerpArr(a.rip,b.rip,t),   glow:lerpArr(a.glow,b.glow,t),
+    glowA:lerp(a.glowA,b.glowA,t), night:lerp(a.night,b.night,t)
+  };
+}
+const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand(0.5,1.5),tw:rand(0,TAU),s:rand(0.4,1.4)});
+
 /* ---------- input ---------- */
 let titleFaded=false;
 function fadeTitle(){
@@ -428,15 +462,39 @@ function frame(now){
   const dt=Math.min((now-last)/1000, 0.05); last=now;
   const t=now/1000;
 
-  // water
+  // water — colour driven by the real local time of day (moonlit-range cycle)
+  const H24=currentHour();
+  const sky=skyAt(H24);
+  const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
   const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#0d2226'); g.addColorStop(1,'#08161a');
+  g.addColorStop(0,rgb(sky.top)); g.addColorStop(1,rgb(sky.bot));
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // caustic dapple — brighter by day, faint at night
   for(const b of blobs){
     const bx=(b.x + Math.sin(t*b.s+b.p)*0.06)*W, by=(b.y + Math.cos(t*b.s*1.3+b.p)*0.06)*H;
     const rg=ctx.createRadialGradient(bx,by,0,bx,by,b.r);
-    rg.addColorStop(0,'rgba(72,140,140,0.05)'); rg.addColorStop(1,'rgba(72,140,140,0)');
+    rg.addColorStop(0,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},${sky.blobA})`);
+    rg.addColorStop(1,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},0)`);
     ctx.fillStyle=rg; ctx.fillRect(bx-b.r,by-b.r,b.r*2,b.r*2);
+  }
+  // low-sun warm rake across the water at dawn (from the east) & dusk (west)
+  if(sky.glowA>0.001){
+    const morning=H24<13, gx0=morning?0:W, gx1=morning?W:0;
+    const wg=ctx.createLinearGradient(gx0,0,gx1,H);
+    wg.addColorStop(0,`rgba(${sky.glow[0]|0},${sky.glow[1]|0},${sky.glow[2]|0},${sky.glowA})`);
+    wg.addColorStop(0.6,`rgba(${sky.glow[0]|0},${sky.glow[1]|0},${sky.glow[2]|0},0)`);
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=wg; ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation='source-over';
+  }
+  // faint star reflections shimmering on the night water
+  if(sky.night>0.02){
+    ctx.fillStyle='#dfeef0';
+    for(const st of stars){
+      ctx.globalAlpha=sky.night*(0.15+0.3*(0.5+0.5*Math.sin(t*st.s+st.tw)));
+      ctx.beginPath(); ctx.arc(st.x*W, st.y*H, st.r, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha=1;
   }
 
   // idle life: a fish surfaces now and then and sings softly
@@ -461,9 +519,9 @@ function frame(now){
   for(let i=ripples.length-1;i>=0;i--){ const r=ripples[i];
     r.r+=90*dt; r.a-=dt*0.5;
     if(r.a<=0||r.r>r.max){ ripples.splice(i,1); continue; }
-    ctx.strokeStyle=`rgba(180,225,215,${r.a})`; ctx.lineWidth=2;
+    ctx.strokeStyle=`rgba(${sky.rip[0]|0},${sky.rip[1]|0},${sky.rip[2]|0},${r.a})`; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,TAU); ctx.stroke();
-    ctx.strokeStyle=`rgba(180,225,215,${r.a*0.4})`;
+    ctx.strokeStyle=`rgba(${sky.rip[0]|0},${sky.rip[1]|0},${sky.rip[2]|0},${r.a*0.4})`;
     ctx.beginPath(); ctx.arc(r.x,r.y,r.r*0.65,0,TAU); ctx.stroke();
   }
 

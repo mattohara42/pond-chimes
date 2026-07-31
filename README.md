@@ -15,6 +15,7 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 - **Hummingbird** — a rare visitor. Every minute or so it flies in from the edge to hover at a lily flower with a soft tremolo trill (the pond's highest register). Tap it and it startles away with a brighter trill.
 - **Bare water** — still ripples, with a very quiet note so every touch answers.
 - **Idle mode** — left alone, fish surface and sing, frogs croak and occasionally wander to a new pad, dragonflies dip, and the hummingbird drops by. The pond self-plays as gentle ambient background.
+- **Day/night** — the water colour follows the real local clock. It keeps its moonlit identity: deep teal-black at night with faint star reflections, brightening only to a soft overcast teal by day, with a warm low-sun rake across the surface at dawn and dusk. No network needed — it reads the device clock, so it works offline.
 
 Audio starts on the first tap (browser autoplay rules); until then the pond is silent but alive.
 
@@ -22,7 +23,9 @@ Audio starts on the first tap (browser autoplay rules); until then the pond is s
 
 **M3** — the full pond ensemble: fish (melody) + lily pads (harmony) + frogs (bass) + dragonflies (sparkle) + hummingbird (rare treat), with self-playing idle behavior for each, per the approved mockup and concept doc.
 
-Deferred: day/night cycle, seasons, feeding mechanic, creature unlocks, settings UI.
+**M4 (in progress)** — a day/night cycle driven by the real local clock, in the moonlit palette range. Next up: tying in live outdoor weather (cloud cover, rain, wind) via a no-key API, degrading gracefully to time-of-day only when offline.
+
+Deferred: outdoor weather tie-in (next), seasons, feeding mechanic, creature unlocks, settings UI.
 
 ## Notes
 
