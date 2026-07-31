@@ -387,14 +387,17 @@ const ROCK_TONES=[
 // an uneven rocky border down the left edge that wraps along the bottom.
 // `reach` varies each stretch's depth & size so the frame isn't a uniform
 // band — some clusters bulge into the pond, others hug the edge tight.
+// the stones are the shoreline: pulled hard into the left edge (their left
+// halves run off-screen behind the ground) and thinned out, so only a
+// modest stony fringe shows at the waterline.
 const ROCK_CLUSTERS=[
-  {cx:0.050, cy:0.05,  edge:'left',   reach:1.05},   // top-left corner
-  {cx:0.030, cy:0.26,  edge:'left',   reach:0.42},   // tight stretch (a break)
-  {cx:0.060, cy:0.49,  edge:'left',   reach:1.18},   // bulge jutting in
-  {cx:0.028, cy:0.71,  edge:'left',   reach:0.40},   // tight again (a break)
-  {cx:0.055, cy:0.95,  edge:'left',   reach:1.20},   // heavy bottom-left corner
-  {cx:0.21,  cy:0.965, edge:'bottom', reach:0.95},   // stones along the bottom
-  {cx:0.39,  cy:0.985, edge:'bottom', reach:0.60}    // trailing off across the bottom
+  {cx:0.015, cy:0.05,  edge:'left',   reach:0.58, shade:true},  // top-left
+  {cx:0.004, cy:0.26,  edge:'left',   reach:0.26},              // tight break
+  {cx:0.028, cy:0.49,  edge:'left',   reach:0.70, shade:true},  // slight bulge
+  {cx:0.004, cy:0.71,  edge:'left',   reach:0.26},              // tight break
+  {cx:0.018, cy:0.95,  edge:'left',   reach:0.64, shade:true},  // bottom-left
+  {cx:0.13,  cy:0.975, edge:'bottom', reach:0.50},              // a little along the bottom
+  {cx:0.29,  cy:0.99,  edge:'bottom', reach:0.32}               // trailing off
 ];
 const rocks=[], shadeSpots=[];
 const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],['P',11],['P',9],['P',7.5],['P',6]];
@@ -419,17 +422,17 @@ const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],
         r:sz*R*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
         verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
     }
-    if(R>=0.9) shadeSpots.push({ cx:c.cx, cy:c.cy, r:120, x:0, y:0 });  // shade only from the big stretches
+    if(c.shade) shadeSpots.push({ cx:c.cx, cy:c.cy, r:128, x:0, y:0 });  // shade from the main shore stretches
   }
 })();
 function layoutRocks(){
   for(const rk of rocks){ rk.x=rk.cx*W+rk.ox; rk.y=rk.cy*H+rk.oy; }
-  for(const s of shadeSpots){                         // sit the shade just inside the corner, over open water
-    const a=Math.atan2(H/2-s.cy*H, W/2-s.cx*W);
-    s.x=s.cx*W+Math.cos(a)*64; s.y=s.cy*H+Math.sin(a)*64;
-  }
+  for(const s of shadeSpots){ s.x=0.18*W; s.y=s.cy*H; }   // shade sits in the open water just off the shore
 }
 layoutRocks();
+
+// right edge of the left-shore ground (wavy, so the shoreline isn't a ruler line)
+function groundRightAt(yf){ return W*(0.092 + 0.030*Math.sin(yf*6.3+0.6) + 0.018*Math.sin(yf*12.7+2.2)); }
 
 /* ---------- water flow (gentle current) --------------------------------
    Our pond has a waterfall spilling in at the top-left and a pump drawing
@@ -439,7 +442,7 @@ layoutRocks();
    dimples the far corner — so you feel the movement without losing the
    still, moonlit calm.                                                     */
 const FLOW={x:0.70, y:0.70};    // unit-ish, toward the bottom-right
-const INLET={x:0.07, y:0.10};   // waterfall lands over the top-left corner rocks
+const INLET={x:0.17, y:0.09};   // waterfall lands in the water just off the top-left shore
 const OUTLET={x:0.93, y:0.90};  // pump intake, bottom-right
 let inletAcc=0, pumpAcc=0;
 
@@ -465,8 +468,8 @@ for(const [fx,fy] of PLANT_SPOTS){
   plants.push({fx,fy,leaves,tint});
 }
 function drawPlant(pl,t){
-  const vis=1-dormantNow*0.92;              // dies back in deep winter
-  if(vis<=0.02) return;
+  const vis=1-dormantNow;                   // dies right back in deep winter
+  if(vis<=0.03) return;
   const pc=season.pad, windx=(weather.wind||0), T=pl.tint||[0,0,0];
   const cl=v=>Math.max(0,Math.min(255,v|0));
   const lo=`rgb(${cl(pc[0]+6+T[0])},${cl(pc[1]+22+T[1])},${cl(pc[2]+4+T[2])})`;
@@ -720,8 +723,8 @@ function drawFish(f,dt,t){
   const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72)*(inShade?0.4:1);   // sluggish under ice; loiter in shade
   f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
   f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
-  const m=60;
-  if(f.x<m||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
+  const m=60, lm=W*0.15;   // stay off the left shore
+  if(f.x<lm||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
   ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.h);
   ctx.globalAlpha=0.85*(1-iceNow*0.3); ctx.filter='blur(0.6px)';   // dimmer, seen through the ice
   const s=f.size, tw=Math.sin(f.wig)*0.5;
@@ -862,6 +865,23 @@ function frame(now){
     }
   }
 
+  // left shore: solid ground behind the stones, so there's no open water to their left
+  {
+    const day=1-(sky.night||0), steps=26;
+    const gg=ctx.createLinearGradient(0,0,0,H);
+    gg.addColorStop(0,`rgb(${(30+day*30)|0},${(24+day*22)|0},${(18+day*13)|0})`);
+    gg.addColorStop(1,`rgb(${(19+day*15)|0},${(14+day*11)|0},${(9+day*6)|0})`);
+    ctx.fillStyle=gg;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    for(let i=0;i<=steps;i++){ const yf=i/steps; ctx.lineTo(groundRightAt(yf), yf*H); }
+    ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+    // a damp waterline where the ground meets the pond
+    ctx.strokeStyle='rgba(16,26,26,0.4)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){ const yf=i/steps, X=groundRightAt(yf), Y=yf*H; i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.stroke();
+  }
+
   fish.forEach(f=>drawFish(f,dt,t));
 
   // baby fish — a little school of fry schooling near the surface in spring
@@ -872,7 +892,7 @@ function frame(now){
       const bsp=b.sp*(1+b.dart*8);
       b.h += Math.sin(t*0.5+b.wig*0.1)*0.02 + rand(-0.03,0.03);
       b.x += Math.cos(b.h)*bsp*dt; b.y += Math.sin(b.h)*bsp*dt;
-      const bm=40; if(b.x<bm||b.x>W-bm||b.y<bm||b.y>H-bm){ b.h=Math.atan2(H/2-b.y,W/2-b.x)+rand(-0.5,0.5); }
+      const bm=40, blm=W*0.15; if(b.x<blm||b.x>W-bm||b.y<bm||b.y>H-bm){ b.h=Math.atan2(H/2-b.y,W/2-b.x)+rand(-0.5,0.5); }
       const s=b.size, tw=Math.sin(b.wig)*0.5;
       ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.h);
       ctx.globalAlpha=0.85*yFade; ctx.fillStyle='#ecc39a';
