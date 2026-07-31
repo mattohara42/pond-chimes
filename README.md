@@ -31,6 +31,11 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
   - A **cardinal** — a bright red spot on a cold winter day, perching on the shore and whistling.
   - **Bats** flit over the water at dusk with faint high ticks.
   - A **rainbow koi** — a patience reward: a big, shimmering fish that surfaces only after the pond's been running a long while, leaping with a warm chord.
+  - **Swallows** swoop low and skim the surface on a windy day.
+  - A **swan** glides serenely across a still, foggy morning.
+  - A **shooting star** streaks across a clear night, mirrored on the water.
+  - A **rabbit** (light brown) visits the water's edge at dawn or dusk.
+  - A **kingfisher** — a rare flash of blue that perches over the water and plunge-dives.
 
   The first time you see one, a soft "field guide" card fades its name in (remembered afterwards, so it stays special). More will keep joining the roster.
 
@@ -62,7 +67,7 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 **M7** — pond layout & flow: lily pads spread across the right side (staggered, low overlap, several flowering); a left-side stony shore (a bed of small stones with big boulders on top, uneven and wrapping a little along the bottom) that casts shade the fish loiter in on a hot day (live temperature); tall, varied wide-leaf water plants along the shore and a few in the open water; and a gentle top-left-waterfall → bottom-right-pump current that the caustics and drifting foliage ride. Adds real pond-edge character.
 
-**M8 (in progress)** — discoveries: rare creatures revealed by real-world conditions, each with its own voice — fireflies (warm summer night), a basking painted turtle (hot day), a great blue heron (dawn), a mallard (overcast/rain), a cardinal (winter day), dusk bats, and a rainbow koi (a patience reward, after long uptime) — with a first-sighting "field guide" card remembered in `localStorage`. A hidden press-and-hold on the shore summons and cycles them on demand for testing / re-showing. The registry makes adding more easy.
+**M8 (in progress)** — discoveries: twelve (so far) rare creatures revealed by real-world conditions, each with its own voice — fireflies (summer night), painted turtle (hot day), great blue heron (dawn), mallard (overcast/rain), cardinal (winter day), bats (dusk), rainbow koi (patience/long uptime), swallows (windy), swan (still foggy morning), shooting star (clear night), rabbit (dawn/dusk) and kingfisher (a rare diving flash) — with a first-sighting "field guide" card remembered in `localStorage`. A hidden press-and-hold on the shore summons and cycles them on demand for testing / re-showing. The registry makes adding more easy.
 
 Deferred: feeding mechanic, more discoveries, settings UI, optional weather/season sound.
 
