@@ -431,8 +431,16 @@ function layoutRocks(){
 }
 layoutRocks();
 
-// right edge of the left-shore ground (wavy, so the shoreline isn't a ruler line)
+// right edge of the left-shore stony bank (wavy, so the shoreline isn't a ruler line)
 function groundRightAt(yf){ return W*(0.092 + 0.030*Math.sin(yf*6.3+0.6) + 0.018*Math.sin(yf*12.7+2.2)); }
+// a packed bed of small stones filling the shore under the big rocks (tf = fraction across the band)
+const gravel=[];
+for(let i=0;i<180;i++){
+  const n=Math.floor(rand(6,9)), verts=[];
+  for(let k=0;k<n;k++) verts.push(rand(0.82,1.0));
+  gravel.push({ tf:Math.pow(rand(0,1),0.85), fy:rand(-0.03,1.03), r:rand(4,13),
+    ry:rand(0.58,0.82), rot:rand(0,TAU), verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
+}
 
 /* ---------- water flow (gentle current) --------------------------------
    Our pond has a waterfall spilling in at the top-left and a pump drawing
@@ -865,17 +873,36 @@ function frame(now){
     }
   }
 
-  // left shore: solid ground behind the stones, so there's no open water to their left
+  // left shore: a packed bed of small stones under the big rocks (no open water to their left)
   {
     const day=1-(sky.night||0), steps=26;
-    const gg=ctx.createLinearGradient(0,0,0,H);
-    gg.addColorStop(0,`rgb(${(30+day*30)|0},${(24+day*22)|0},${(18+day*13)|0})`);
-    gg.addColorStop(1,`rgb(${(19+day*15)|0},${(14+day*11)|0},${(9+day*6)|0})`);
-    ctx.fillStyle=gg;
+    ctx.save();
+    // clip to the shore band so the stones stay on the bank
     ctx.beginPath(); ctx.moveTo(0,0);
     for(let i=0;i<=steps;i++){ const yf=i/steps; ctx.lineTo(groundRightAt(yf), yf*H); }
-    ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
-    // a damp waterline where the ground meets the pond
+    ctx.lineTo(0,H); ctx.closePath(); ctx.clip();
+    // dark stony base so no gaps show through the gravel
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,`rgb(${(26+day*18)|0},${(34+day*20)|0},${(38+day*20)|0})`);
+    bg.addColorStop(1,`rgb(${(18+day*12)|0},${(24+day*14)|0},${(27+day*14)|0})`);
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W*0.2,H);
+    // the small stones
+    for(const s of gravel){
+      const gx=s.tf*groundRightAt(s.fy), gy=s.fy*H, n=s.verts.length, pts=[];
+      ctx.save(); ctx.translate(gx,gy); ctx.rotate(s.rot);
+      for(let i=0;i<n;i++){ const a=i/n*TAU, rr=s.verts[i]; pts.push([Math.cos(a)*s.r*rr, Math.sin(a)*s.r*rr*s.ry]); }
+      ctx.beginPath();
+      let mx=(pts[n-1][0]+pts[0][0])/2, my=(pts[n-1][1]+pts[0][1])/2; ctx.moveTo(mx,my);
+      for(let i=0;i<n;i++){ const c=pts[i], nx=pts[(i+1)%n]; ctx.quadraticCurveTo(c[0],c[1],(c[0]+nx[0])/2,(c[1]+nx[1])/2); }
+      ctx.closePath();
+      const grd=ctx.createLinearGradient(0,-s.r*s.ry,0,s.r*s.ry);
+      grd.addColorStop(0,s.tone.hi); grd.addColorStop(1,s.tone.lo);
+      ctx.fillStyle=grd; ctx.fill();
+      ctx.strokeStyle='rgba(150,175,188,0.10)'; ctx.lineWidth=0.6; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    // damp waterline where the stony shore meets the pond
     ctx.strokeStyle='rgba(16,26,26,0.4)'; ctx.lineWidth=2;
     ctx.beginPath();
     for(let i=0;i<=steps;i++){ const yf=i/steps, X=groundRightAt(yf), Y=yf*H; i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
