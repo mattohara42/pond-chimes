@@ -280,7 +280,7 @@ const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand
      2) FIXED_LOCATION  below       (bake in the backyard pond once)
      3) browser geolocation         (prompts once; needs https)
    If none resolve, weather simply stays off.                               */
-const FIXED_LOCATION = null; // e.g. { lat: 37.7749, lon: -122.4194 }
+const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
 const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, loaded:false };
 
 function resolveLocation(cb){
