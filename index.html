@@ -267,6 +267,58 @@ function skyAt(H){
 }
 const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand(0.5,1.5),tw:rand(0,TAU),s:rand(0.4,1.4)});
 
+/* ---------- live outdoor weather (optional, degrades to clear) ----------
+   Pulls current conditions from Open-Meteo (free, no API key, CORS-ok) and
+   lets the real sky bleed into the pond: cloud cover greys the water and
+   hides the sun; rain stipples the surface with dimples; wind roughens it
+   and stirs the fish; snow drifts down. Everything defaults to "clear" so
+   with no network — or no location — the pond looks exactly like the plain
+   day/night cycle. Nothing here ever throws into the render loop.
+
+   Location, in priority order:
+     1) ?lat=..&lon=..  in the URL  (easiest for a kiosk / wall panel)
+     2) FIXED_LOCATION  below       (bake in the backyard pond once)
+     3) browser geolocation         (prompts once; needs https)
+   If none resolve, weather simply stays off.                               */
+const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
+const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, loaded:false };
+
+function resolveLocation(cb){
+  const q = new URLSearchParams(location.search);
+  const qlat = parseFloat(q.get('lat')), qlon = parseFloat(q.get('lon'));
+  if(isFinite(qlat) && isFinite(qlon)) return cb(qlat, qlon);
+  if(FIXED_LOCATION) return cb(FIXED_LOCATION.lat, FIXED_LOCATION.lon);
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      p => cb(p.coords.latitude, p.coords.longitude),
+      () => cb(null, null),
+      { timeout:8000, maximumAge:3600000 }
+    );
+  } else cb(null, null);
+}
+async function fetchWeather(){
+  if(weather.lat == null) return;
+  try{
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + weather.lat +
+      '&longitude=' + weather.lon +
+      '&current=precipitation,snowfall,cloud_cover,wind_speed_10m';
+    const r = await fetch(url);
+    if(!r.ok) return;
+    const c = (await r.json()).current || {};
+    weather.cloud  = +c.cloud_cover    || 0;   // %
+    weather.precip = +c.precipitation  || 0;   // mm
+    weather.snow   = +c.snowfall       || 0;   // cm
+    weather.wind   = +c.wind_speed_10m || 0;   // km/h
+    weather.loaded = true;
+  }catch(e){ /* offline / blocked: stay on the plain day-night sky */ }
+}
+resolveLocation((lat, lon) => { weather.lat = lat; weather.lon = lon; fetchWeather(); });
+setInterval(fetchWeather, 10*60*1000); // conditions drift slowly; refresh every 10 min
+
+// drifting snow flecks — only drawn when it's actually snowing outside
+const flakes=[]; for(let i=0;i<80;i++) flakes.push({x:rand(0,1),y:rand(0,1),r:rand(1,2.4),sp:rand(0.02,0.06),sw:rand(0,TAU),sa:rand(0.4,0.9)});
+let rainAcc=0, chopAcc=0;
+
 /* ---------- input ---------- */
 let titleFaded=false;
 function fadeTitle(){
@@ -465,6 +517,16 @@ function frame(now){
   // water — colour driven by the real local time of day (moonlit-range cycle)
   const H24=currentHour();
   const sky=skyAt(H24);
+  // outdoor cloud cover greys & flattens the water and hides sun + stars
+  const cloud=(weather.cloud||0)/100;
+  if(cloud>0.01){
+    const grey=[44,56,60];
+    sky.top=sky.top.map((v,i)=>v+(grey[i]-v)*cloud*0.55);
+    sky.bot=sky.bot.map((v,i)=>v+(grey[i]-v)*cloud*0.45);
+    sky.blobA*=1-cloud*0.85;   // overcast → no sun dapple
+    sky.glowA*=1-cloud*0.90;   // overcast → no low-sun rake
+    sky.night*=1-cloud*0.80;   // overcast → stars veiled
+  }
   const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
   const g=ctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,rgb(sky.top)); g.addColorStop(1,rgb(sky.bot));
@@ -497,9 +559,22 @@ function frame(now){
     ctx.globalAlpha=1;
   }
 
-  // idle life: a fish surfaces now and then and sings softly
+  // weather on the water: rain stipples the surface with little dimples,
+  // and stronger wind roughens it with faint chop (both silent — they just
+  // feed the existing ripple system, so they take the sky's ripple colour)
+  const precip=weather.precip||0, wind=weather.wind||0;
+  if(precip>0){
+    rainAcc += dt * Math.min(precip*18, 34);   // drops/sec, capped
+    while(rainAcc>=1){ rainAcc--; ripples.push({x:rand(0,W),y:rand(0,H),r:1.5,max:rand(9,18),a:0.30}); }
+  }
+  if(wind>12){
+    chopAcc += dt * Math.min((wind-12)*0.35, 7);
+    while(chopAcc>=1){ chopAcc--; ripples.push({x:rand(0,W),y:rand(0,H),r:2,max:rand(14,26),a:0.14}); }
+  }
+
+  // idle life: a fish surfaces now and then and sings softly (livelier in wind)
   idleT-=dt;
-  if(idleT<0){ idleT=rand(4,9);
+  if(idleT<0){ idleT=rand(4,9)*(1-Math.min(wind/60,0.45));
     const f=fish[Math.floor(rand(0,fish.length))];
     ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
     pluck(f.y, 0.3);
@@ -538,6 +613,22 @@ function frame(now){
     ctx.globalAlpha=n.a; ctx.fillStyle=n.color; ctx.fillText(n.g,n.x,n.y);
   }
   ctx.globalAlpha=1;
+
+  // snow drifting over the pond when it's actually snowing outside
+  const snow=weather.snow||0;
+  if(snow>0){
+    const shown=Math.min(flakes.length, Math.ceil(snow*flakes.length*4));
+    ctx.fillStyle='#eef4f6';
+    for(let i=0;i<shown;i++){ const fl=flakes[i];
+      fl.y += fl.sp*dt*20; fl.sw += dt;
+      fl.x += Math.sin(fl.sw)*0.0006 + (wind/8000);
+      if(fl.y>1){ fl.y-=1; fl.x=rand(0,1); }
+      if(fl.x>1) fl.x-=1; if(fl.x<0) fl.x+=1;
+      ctx.globalAlpha=fl.sa;
+      ctx.beginPath(); ctx.arc(fl.x*W, fl.y*H, fl.r, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
 
   requestAnimationFrame(frame);
 }
