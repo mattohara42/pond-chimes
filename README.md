@@ -41,6 +41,10 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 
 Audio starts on the first tap (browser autoplay rules); until then the pond is silent but alive.
 
+## Birthdays
+
+On a family birthday, that person's favourite animal comes to the pond all day, with a "Happy birthday, NAME!" card — a private little surprise. The list lives in the `BIRTHDAYS` array near the discoveries in `index.html` (name, month, day, and which animal). Current visitors: a bunny family, a duck family, a breaching narwhal, the blue heron, and a flamingo. Because it reads the real device clock, no setup is needed — it just happens on the day.
+
 ## Seeing the discoveries on demand (hidden)
 
 Discoveries wait for their real-world moment (a summer night, a hot afternoon), which is lovely on a wall panel but hard to demo. There's a hidden way to summon them: **press and hold on the stony left shore** (about a second). Each hold summons the next discovery right away — regardless of the weather or season — and replays its card, cycling through the whole roster. It's the test-and-re-show tool; a normal short tap on the shore does nothing special.
