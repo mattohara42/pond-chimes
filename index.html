@@ -384,20 +384,25 @@ const ROCK_TONES=[
   {hi:'#4c5f68', lo:'#26343b'}, {hi:'#57646d', lo:'#2b343b'},
   {hi:'#445760', lo:'#212c31'}, {hi:'#50606a', lo:'#28343a'}
 ];
-const ROCK_CLUSTERS=[ {cx:0.05, cy:0.93}, {cx:0.05, cy:0.07} ]; // hard into the bottom-left & top-left corners (frame the edge)
+// a heavy rocky border running down the whole left edge: bottom & top corners
+// plus a middle stretch, so the rocks read as a frame
+const ROCK_CLUSTERS=[ {cx:0.045, cy:0.94}, {cx:0.035, cy:0.50}, {cx:0.045, cy:0.06} ];
 const rocks=[], shadeSpots=[];
-// each cluster: big smooth boulders, a few medium, a scatter of pebbles
-const ROCK_SPEC=[['L',58],['L',46],['M',30],['M',24],['P',11],['P',9],['P',7.5],['P',6]];
+// bigger boulders and more of them
+const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],['P',11],['P',9],['P',7.5],['P',6]];
 (function buildRocks(){
   for(const c of ROCK_CLUSTERS){
-    const sx = c.cx<0.5?1:-1, sy = c.cy<0.5?1:-1;   // "into the pond" from this corner
+    const sx = c.cx<0.5?1:-1;
+    const sy = c.cy<0.34?1 : c.cy>0.66?-1 : 0;       // corners fan off their edge; the middle spreads both ways
     for(const [k,sz] of ROCK_SPEC){
-      const spread = k==='L'?42 : k==='M'?78 : 104;
+      const depth = k==='L'?54 : k==='M'?96 : 128;   // how far into the pond
+      const along = k==='L'?68 : k==='M'?122 : 168;  // how far along the edge
       const n=k==='P'?Math.floor(rand(6,8)):Math.floor(rand(8,11)), verts=[];
       for(let i=0;i<n;i++) verts.push(rand(0.86,1.0));   // rounder = smoother boulders
-      // hug the corner and fan inward along the two edges (small negative = slight off-edge bleed)
-      rocks.push({ cx:c.cx, cy:c.cy, ox:sx*rand(-14,spread), oy:sy*rand(-14,spread*0.9),
-        r:sz*rand(0.92,1.12), ry:rand(0.66,0.82), rot:rand(0,TAU),
+      const ox=sx*rand(-18, depth);                      // slight off-edge bleed, fan inward
+      const oy=sy!==0 ? sy*rand(-20, along) : rand(-along, along);
+      rocks.push({ cx:c.cx, cy:c.cy, ox, oy,
+        r:sz*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
         verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
     }
     shadeSpots.push({ cx:c.cx, cy:c.cy, r:120, x:0, y:0 });
@@ -423,6 +428,46 @@ const FLOW={x:0.70, y:0.70};    // unit-ish, toward the bottom-right
 const INLET={x:0.07, y:0.10};   // waterfall lands over the top-left corner rocks
 const OUTLET={x:0.93, y:0.90};  // pump intake, bottom-right
 let inletAcc=0, pumpAcc=0;
+
+/* ---------- tall wide-leaf water plants -------------------------------
+   Emergent clumps (think pickerelweed / canna) poking up among the rocks
+   to break up the frame with some height. Each clump is a fan of broad
+   curved blades that sway with the wind, take the season's colour, and die
+   back with the lily pads in deep winter.                                  */
+const PLANT_SPOTS=[[0.055,0.20],[0.045,0.42],[0.075,0.58],[0.05,0.80],[0.12,0.36]];
+const plants=[];
+for(const [fx,fy] of PLANT_SPOTS){
+  const leaves=[], n=Math.floor(rand(5,8));
+  for(let i=0;i<n;i++) leaves.push({
+    len:rand(52,98), wid:rand(10,17), ang:rand(-0.55,0.55),
+    bend:rand(-0.4,0.4), phase:rand(0,TAU), speed:rand(0.5,1.0)
+  });
+  leaves.sort((a,b)=>b.len-a.len);          // longest blades drawn first (behind)
+  plants.push({fx,fy,leaves});
+}
+function drawPlant(pl,t){
+  const vis=1-dormantNow*0.92;              // dies back in deep winter
+  if(vis<=0.02) return;
+  const pc=season.pad, windx=(weather.wind||0);
+  const lo=`rgb(${(pc[0]+6)|0},${(pc[1]+22)|0},${(pc[2]+4)|0})`;
+  const hi=`rgb(${(pc[0]+28)|0},${(pc[1]+48)|0},${(pc[2]+16)|0})`;
+  ctx.save(); ctx.translate(pl.fx*W, pl.fy*H); ctx.globalAlpha=vis;
+  for(const lf of pl.leaves){
+    const sway=Math.sin(t*lf.speed+lf.phase)*(0.09+windx*0.004);
+    ctx.save(); ctx.rotate(lf.ang+sway);
+    const grd=ctx.createLinearGradient(0,0,0,-lf.len);
+    grd.addColorStop(0,lo); grd.addColorStop(1,hi); ctx.fillStyle=grd;
+    const bend=lf.bend+sway*1.6, tipx=Math.sin(bend)*lf.len*0.28, tipy=-lf.len;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(-lf.wid+tipx*0.3, tipy*0.5, tipx, tipy);
+    ctx.quadraticCurveTo( lf.wid+tipx*0.3, tipy*0.5, 0, 0);
+    ctx.fill();
+    ctx.strokeStyle='rgba(18,38,20,0.22)'; ctx.lineWidth=1;   // midrib
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(tipx*0.4, tipy*0.5, tipx, tipy); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+}
 
 /* ---------- input ---------- */
 let titleFaded=false;
@@ -859,6 +904,8 @@ function frame(now){
 
   // rocks last (over the fish, so a fish can slip in behind a rock)
   rocks.forEach(drawRock);
+  // tall water plants rise up among the rocks to break up the frame
+  plants.forEach(pl=>drawPlant(pl,t));
 
   // note glyphs
   ctx.font='20px Georgia, serif';

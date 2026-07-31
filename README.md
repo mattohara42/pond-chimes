@@ -14,7 +14,8 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 - **Dragonflies** — skim across the surface; tap one and it dashes away with a quick high shimmer arp. They occasionally dip to the water with a tiny ripple and a single sparkle note.
 - **Hummingbird** — a rare visitor. Every minute or so it flies in from the edge to hover at a lily flower with a soft tremolo trill (the pond's highest register). Tap it and it startles away with a brighter trill.
 - **Lily pads** are grouped together in the right third of the pond — the still water, away from the waterfall and rocks. (Tap a flower to open/close it.)
-- **Rocks** — big, smooth boulders with a scatter of pebbles cluster in the two left corners, like the real pond's edges. They cast shade on the water, and on a hot day (from the live temperature) the fish drift over to loiter in the cool. Rocks are permanent — they poke up through the winter ice.
+- **Rocks** — big, smooth boulders with a scatter of pebbles form a heavy rocky border down the whole left edge, like the real pond's bank. They cast shade on the water, and on a hot day (from the live temperature) the fish drift over to loiter in the cool. Rocks are permanent — they poke up through the winter ice.
+- **Water plants** — tall, wide-leaf clumps (think pickerelweed / canna) rise up among the rocks to break up the frame with some height. They sway with the wind, take on the season's colour, and die back with the lily pads in deep winter.
 - **Water flow** — a gentle current runs the way the real pond does: a waterfall spills in at the top-left (with a little foam where it lands) and the surface drifts down toward the pump intake at the bottom-right. The caustic light and any drifting petals or leaves ride the current. Kept subtle, so the pond still feels calm.
 - **Bare water** — still ripples, with a very quiet note so every touch answers.
 - **Idle mode** — left alone, fish surface and sing, frogs croak and occasionally wander to a new pad, dragonflies dip, and the hummingbird drops by. The pond self-plays as gentle ambient background.
@@ -44,7 +45,7 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 **M6** — seasons on the real calendar date (hemisphere-aware): seasonal water tint, lily-pad colour, drifting spring petals / autumn leaves, cold-quieted dragonflies and frogs, a spring school of baby fish, and a winter ice sheet with the fish drifting slow beneath it. Completes the "pond mirrors the world outside" trio with day/night and weather.
 
-**M7** — pond layout & flow: lily pads grouped in the right third; big smooth boulders + pebbles in the two left corners casting shade (fish loiter there on a hot day, driven by live temperature); and a gentle top-left-waterfall → bottom-right-pump current that the caustics and drifting foliage ride. Adds real pond-edge character.
+**M7** — pond layout & flow: lily pads grouped in the right third; a heavy border of big smooth boulders + pebbles down the left edge casting shade (fish loiter there on a hot day, driven by live temperature); tall wide-leaf water plants rising among the rocks; and a gentle top-left-waterfall → bottom-right-pump current that the caustics and drifting foliage ride. Adds real pond-edge character.
 
 Deferred: feeding mechanic, creature unlocks, settings UI, optional weather/season sound.
 
