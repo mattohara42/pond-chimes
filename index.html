@@ -384,28 +384,42 @@ const ROCK_TONES=[
   {hi:'#4c5f68', lo:'#26343b'}, {hi:'#57646d', lo:'#2b343b'},
   {hi:'#445760', lo:'#212c31'}, {hi:'#50606a', lo:'#28343a'}
 ];
-// a heavy rocky border running down the whole left edge: bottom & top corners
-// plus a middle stretch, so the rocks read as a frame
-const ROCK_CLUSTERS=[ {cx:0.045, cy:0.94}, {cx:0.035, cy:0.50}, {cx:0.045, cy:0.06} ];
+// an uneven rocky border down the left edge that wraps along the bottom.
+// `reach` varies each stretch's depth & size so the frame isn't a uniform
+// band — some clusters bulge into the pond, others hug the edge tight.
+const ROCK_CLUSTERS=[
+  {cx:0.050, cy:0.05,  edge:'left',   reach:1.05},   // top-left corner
+  {cx:0.030, cy:0.26,  edge:'left',   reach:0.42},   // tight stretch (a break)
+  {cx:0.060, cy:0.49,  edge:'left',   reach:1.18},   // bulge jutting in
+  {cx:0.028, cy:0.71,  edge:'left',   reach:0.40},   // tight again (a break)
+  {cx:0.055, cy:0.95,  edge:'left',   reach:1.20},   // heavy bottom-left corner
+  {cx:0.21,  cy:0.965, edge:'bottom', reach:0.95},   // stones along the bottom
+  {cx:0.39,  cy:0.985, edge:'bottom', reach:0.60}    // trailing off across the bottom
+];
 const rocks=[], shadeSpots=[];
-// bigger boulders and more of them
 const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],['P',11],['P',9],['P',7.5],['P',6]];
 (function buildRocks(){
   for(const c of ROCK_CLUSTERS){
-    const sx = c.cx<0.5?1:-1;
-    const sy = c.cy<0.34?1 : c.cy>0.66?-1 : 0;       // corners fan off their edge; the middle spreads both ways
+    const R=c.reach;
     for(const [k,sz] of ROCK_SPEC){
-      const depth = k==='L'?54 : k==='M'?96 : 128;   // how far into the pond
-      const along = k==='L'?68 : k==='M'?122 : 168;  // how far along the edge
+      const depth=(k==='L'?54 : k==='M'?96 : 128)*R;              // into the pond, scaled by reach
+      const along=(k==='L'?68 : k==='M'?122 : 168)*(0.65+R*0.5);  // along the edge
       const n=k==='P'?Math.floor(rand(6,8)):Math.floor(rand(8,11)), verts=[];
-      for(let i=0;i<n;i++) verts.push(rand(0.86,1.0));   // rounder = smoother boulders
-      const ox=sx*rand(-18, depth);                      // slight off-edge bleed, fan inward
-      const oy=sy!==0 ? sy*rand(-20, along) : rand(-along, along);
+      for(let i=0;i<n;i++) verts.push(rand(0.86,1.0));            // rounder = smoother boulders
+      let ox, oy;
+      if(c.edge==='bottom'){
+        ox=rand(-along*0.5, along);        // fan rightward along the bottom
+        oy=-rand(-18, depth);              // up into the pond
+      } else {
+        const sy=c.cy<0.34?1 : c.cy>0.66?-1 : 0;   // corners fan off their edge; mid spreads both ways
+        ox=rand(-18, depth);               // into the pond, slight off-edge bleed
+        oy=sy!==0 ? sy*rand(-20, along) : rand(-along, along);
+      }
       rocks.push({ cx:c.cx, cy:c.cy, ox, oy,
-        r:sz*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
+        r:sz*R*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
         verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
     }
-    shadeSpots.push({ cx:c.cx, cy:c.cy, r:120, x:0, y:0 });
+    if(R>=0.9) shadeSpots.push({ cx:c.cx, cy:c.cy, r:120, x:0, y:0 });  // shade only from the big stretches
   }
 })();
 function layoutRocks(){
@@ -434,23 +448,29 @@ let inletAcc=0, pumpAcc=0;
    to break up the frame with some height. Each clump is a fan of broad
    curved blades that sway with the wind, take the season's colour, and die
    back with the lily pads in deep winter.                                  */
-const PLANT_SPOTS=[[0.055,0.20],[0.045,0.42],[0.075,0.58],[0.05,0.80],[0.12,0.36]];
+const PLANT_SPOTS=[
+  [0.055,0.16],[0.038,0.40],[0.078,0.54],[0.05,0.82],[0.15,0.955],  // among the left/bottom rocks
+  [0.63,0.38],[0.965,0.60],[0.83,0.90]                              // just a few out in the water on the right
+];
 const plants=[];
 for(const [fx,fy] of PLANT_SPOTS){
-  const leaves=[], n=Math.floor(rand(5,8));
+  const scale=rand(0.66,1.38), broad=rand(0.7,1.5);   // some tall & narrow, some short & broad
+  const tint=[rand(-16,10), rand(-8,16), rand(-12,8)];// per-clump colour shift
+  const n=Math.floor(rand(4,9)), leaves=[];
   for(let i=0;i<n;i++) leaves.push({
-    len:rand(52,98), wid:rand(10,17), ang:rand(-0.55,0.55),
-    bend:rand(-0.4,0.4), phase:rand(0,TAU), speed:rand(0.5,1.0)
+    len:rand(48,102)*scale, wid:rand(9,16)*broad, ang:rand(-0.62,0.62),
+    bend:rand(-0.45,0.45), phase:rand(0,TAU), speed:rand(0.5,1.05)
   });
   leaves.sort((a,b)=>b.len-a.len);          // longest blades drawn first (behind)
-  plants.push({fx,fy,leaves});
+  plants.push({fx,fy,leaves,tint});
 }
 function drawPlant(pl,t){
   const vis=1-dormantNow*0.92;              // dies back in deep winter
   if(vis<=0.02) return;
-  const pc=season.pad, windx=(weather.wind||0);
-  const lo=`rgb(${(pc[0]+6)|0},${(pc[1]+22)|0},${(pc[2]+4)|0})`;
-  const hi=`rgb(${(pc[0]+28)|0},${(pc[1]+48)|0},${(pc[2]+16)|0})`;
+  const pc=season.pad, windx=(weather.wind||0), T=pl.tint||[0,0,0];
+  const cl=v=>Math.max(0,Math.min(255,v|0));
+  const lo=`rgb(${cl(pc[0]+6+T[0])},${cl(pc[1]+22+T[1])},${cl(pc[2]+4+T[2])})`;
+  const hi=`rgb(${cl(pc[0]+28+T[0])},${cl(pc[1]+48+T[1])},${cl(pc[2]+16+T[2])})`;
   ctx.save(); ctx.translate(pl.fx*W, pl.fy*H); ctx.globalAlpha=vis;
   for(const lf of pl.leaves){
     const sway=Math.sin(t*lf.speed+lf.phase)*(0.09+windx*0.004);
