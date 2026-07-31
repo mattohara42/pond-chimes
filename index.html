@@ -384,17 +384,19 @@ const ROCK_TONES=[
   {hi:'#4c5f68', lo:'#26343b'}, {hi:'#57646d', lo:'#2b343b'},
   {hi:'#445760', lo:'#212c31'}, {hi:'#50606a', lo:'#28343a'}
 ];
-const ROCK_CLUSTERS=[ {cx:0.11, cy:0.86}, {cx:0.11, cy:0.15} ]; // bottom-left & top-left corners
+const ROCK_CLUSTERS=[ {cx:0.05, cy:0.93}, {cx:0.05, cy:0.07} ]; // hard into the bottom-left & top-left corners (frame the edge)
 const rocks=[], shadeSpots=[];
 // each cluster: big smooth boulders, a few medium, a scatter of pebbles
 const ROCK_SPEC=[['L',58],['L',46],['M',30],['M',24],['P',11],['P',9],['P',7.5],['P',6]];
 (function buildRocks(){
   for(const c of ROCK_CLUSTERS){
+    const sx = c.cx<0.5?1:-1, sy = c.cy<0.5?1:-1;   // "into the pond" from this corner
     for(const [k,sz] of ROCK_SPEC){
-      const spread = k==='L'?36 : k==='M'?60 : 74;
+      const spread = k==='L'?42 : k==='M'?78 : 104;
       const n=k==='P'?Math.floor(rand(6,8)):Math.floor(rand(8,11)), verts=[];
       for(let i=0;i<n;i++) verts.push(rand(0.86,1.0));   // rounder = smoother boulders
-      rocks.push({ cx:c.cx, cy:c.cy, ox:rand(-spread,spread), oy:rand(-spread,spread)*0.8,
+      // hug the corner and fan inward along the two edges (small negative = slight off-edge bleed)
+      rocks.push({ cx:c.cx, cy:c.cy, ox:sx*rand(-14,spread), oy:sy*rand(-14,spread*0.9),
         r:sz*rand(0.92,1.12), ry:rand(0.66,0.82), rot:rand(0,TAU),
         verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
     }
@@ -403,9 +405,9 @@ const ROCK_SPEC=[['L',58],['L',46],['M',30],['M',24],['P',11],['P',9],['P',7.5],
 })();
 function layoutRocks(){
   for(const rk of rocks){ rk.x=rk.cx*W+rk.ox; rk.y=rk.cy*H+rk.oy; }
-  for(const s of shadeSpots){                         // pull the shade a touch toward open water
+  for(const s of shadeSpots){                         // sit the shade just inside the corner, over open water
     const a=Math.atan2(H/2-s.cy*H, W/2-s.cx*W);
-    s.x=s.cx*W+Math.cos(a)*34; s.y=s.cy*H+Math.sin(a)*34;
+    s.x=s.cx*W+Math.cos(a)*64; s.y=s.cy*H+Math.sin(a)*64;
   }
 }
 layoutRocks();
@@ -418,7 +420,7 @@ layoutRocks();
    dimples the far corner — so you feel the movement without losing the
    still, moonlit calm.                                                     */
 const FLOW={x:0.70, y:0.70};    // unit-ish, toward the bottom-right
-const INLET={x:0.11, y:0.14};   // waterfall lands over the top-left rocks
+const INLET={x:0.07, y:0.10};   // waterfall lands over the top-left corner rocks
 const OUTLET={x:0.93, y:0.90};  // pump intake, bottom-right
 let inletAcc=0, pumpAcc=0;
 
