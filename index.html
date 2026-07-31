@@ -619,7 +619,7 @@ const heron={
   id:'heron', name:'Great blue heron', sub:'a still dawn',
   active:false, x:0, y:0, fy:0, state:'in', timer:0,
   wants(){ const h=currentHour(); return h>5 && h<7.6 && dormantNow<0.6; },
-  start(){ this.active=true; this.x=rand(0.24,0.42)*W; this.fy=rand(0.52,0.72)*H;
+  start(){ this.active=true; this.x=rand(0.24,0.42)*W; this.fy=rand(0.62,0.80)*H;
     this.y=-120; this.state='in'; this.timer=rand(26,60);
     scatterFish(this.x,150); if(padSynth) padSynth.triggerAttackRelease('D3',1.6,undefined,0.3);
   },
@@ -630,7 +630,7 @@ const heron={
     this.draw();
   },
   draw(){
-    ctx.save(); ctx.translate(this.x,this.y); ctx.lineCap='round';
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(1.7,1.7); ctx.lineCap='round';  // herons tower over the fish
     ctx.strokeStyle='#556b76'; ctx.lineWidth=2.2;                       // legs
     ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-4,-42); ctx.moveTo(5,0); ctx.lineTo(3,-42); ctx.stroke();
     ctx.fillStyle='rgba(90,116,128,0.7)';                               // tail
@@ -673,7 +673,7 @@ const ducks={
   },
   draw(){
     const tip=this.tip||0;
-    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir,1); ctx.rotate(tip*0.5);
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir*1.7,1.7); ctx.rotate(tip*0.5); // a duck reads bigger than a fish
     ctx.fillStyle='#8b959b'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // body
     ctx.fillStyle='#7a5a3e'; ctx.beginPath(); ctx.ellipse(11,1,7,6,0,0,TAU); ctx.fill();       // breast
     ctx.strokeStyle='#3a3f42'; ctx.lineWidth=2.5; ctx.lineCap='round';                          // tail curl
