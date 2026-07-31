@@ -319,6 +319,52 @@ setInterval(fetchWeather, 10*60*1000); // conditions drift slowly; refresh every
 const flakes=[]; for(let i=0;i<80;i++) flakes.push({x:rand(0,1),y:rand(0,1),r:rand(1,2.4),sp:rand(0.02,0.06),sw:rand(0,TAU),sa:rand(0.4,0.9)});
 let rainAcc=0, chopAcc=0;
 
+/* ---------- seasons (real calendar date, hemisphere-aware) -------------
+   The third way the pond mirrors the world outside (after time & weather):
+   the year drifts through it. A subtle tint warms or cools the water, the
+   lily pads take on the season's colour, blossom petals fall in spring and
+   leaves in autumn, and the cold quiets the dragonflies and frogs. Anchors
+   are keyed to a month-float (0..12) and interpolated, so the change is
+   gradual — you'd never catch it switching. Southern latitudes flip by six
+   months. All modifiers sit near "neutral summer", so the pond's identity
+   holds year-round.                                                        */
+const SEASON=[
+  {m:0.0,  warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.12, petals:0.00, leaf:[168,176,196]}, // deep winter
+  {m:2.5,  warmth:0.18, tint:[120,175,175], tintA:0.06, pad:[44,92,66],  fall:0.00, petals:0.12, leaf:[160,196,158]}, // late winter
+  {m:3.8,  warmth:0.55, tint:[150,205,160], tintA:0.08, pad:[52,120,78], fall:0.00, petals:0.85, leaf:[244,202,214]}, // spring bloom
+  {m:5.8,  warmth:0.92, tint:[212,205,150], tintA:0.05, pad:[46,104,62], fall:0.00, petals:0.10, leaf:[120,170,110]}, // early summer
+  {m:6.8,  warmth:1.00, tint:[230,210,150], tintA:0.05, pad:[42,95,58],  fall:0.00, petals:0.00, leaf:[120,170,110]}, // high summer
+  {m:8.6,  warmth:0.60, tint:[222,182,120], tintA:0.06, pad:[74,102,52], fall:0.32, petals:0.00, leaf:[222,150,80]},  // early autumn
+  {m:9.6,  warmth:0.35, tint:[230,160,90],  tintA:0.10, pad:[94,88,46],  fall:0.90, petals:0.00, leaf:[224,120,60]},  // peak autumn
+  {m:10.6, warmth:0.15, tint:[200,150,110], tintA:0.09, pad:[82,72,48],  fall:0.55, petals:0.00, leaf:[190,110,70]},  // late autumn
+  {m:11.5, warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.15, petals:0.00, leaf:[168,176,196]}  // winter
+];
+function currentMonth(){
+  const d=new Date(), doy=(d - new Date(d.getFullYear(),0,1))/86400000;
+  return (doy/365.25)*12; // 0 = Jan 1 … 12 = year end
+}
+function seasonAt(m){
+  let i=0; while(i<SEASON.length && SEASON[i].m<=m) i++;
+  const b=SEASON[i%SEASON.length], a=SEASON[(i-1+SEASON.length)%SEASON.length];
+  let span=(((b.m-a.m)%12)+12)%12; if(span===0) span=12;
+  const t=((((m-a.m)%12)+12)%12)/span;
+  return {
+    warmth:lerp(a.warmth,b.warmth,t), tint:lerpArr(a.tint,b.tint,t), tintA:lerp(a.tintA,b.tintA,t),
+    pad:lerpArr(a.pad,b.pad,t), fall:lerp(a.fall,b.fall,t), petals:lerp(a.petals,b.petals,t),
+    leaf:lerpArr(a.leaf,b.leaf,t)
+  };
+}
+function seasonNow(){
+  let m=currentMonth();
+  const lat = weather.lat!=null ? weather.lat : (FIXED_LOCATION?FIXED_LOCATION.lat:1);
+  if(lat<0) m=(m+6)%12;             // southern hemisphere is half a year offset
+  return seasonAt(m);
+}
+// shared each frame so the draw helpers can read the season without threading it through
+let season=seasonAt(6.8), warmthNow=1;
+// drifting foliage — leaves in autumn, blossom petals in spring
+const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
+
 /* ---------- input ---------- */
 let titleFaded=false;
 function fadeTitle(){
@@ -385,10 +431,11 @@ cv.addEventListener('pointerdown', async (e)=>{
 function drawPad(p,t){
   const bob=Math.sin(t*0.7+p.bob)*2;
   ctx.save(); ctx.translate(p.x,p.y+bob); ctx.rotate(p.rot);
-  ctx.fillStyle='#2a4d38';
+  const pc=season.pad;
+  ctx.fillStyle=`rgb(${pc[0]|0},${pc[1]|0},${pc[2]|0})`;
   ctx.beginPath(); ctx.moveTo(0,0);
   ctx.arc(0,0,p.r, p.notch*0.4, TAU - p.notch*0.4); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='rgba(61,107,79,0.9)'; ctx.lineWidth=2;
+  ctx.strokeStyle=`rgba(${(pc[0]+30)|0},${(pc[1]+35)|0},${(pc[2]+28)|0},0.9)`; ctx.lineWidth=2;
   ctx.beginPath(); ctx.arc(0,0,p.r*0.72, p.notch*0.4, TAU-p.notch*0.4); ctx.stroke();
   ctx.restore();
   if(p.flower){
@@ -423,7 +470,7 @@ function drawFrog(f,dt,t){
   } else {
     const p=pads[f.pad]; x=p.x; y=p.y+Math.sin(t*0.7+p.bob)*2-8;
     f.croak-=dt;
-    if(f.croak<-f.croakT){ f.croak=1; f.croakT=rand(6,14); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
+    if(f.croak<-f.croakT){ f.croak=1; f.croakT=rand(6,14)/(0.2+0.8*warmthNow); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
   }
   ctx.save(); ctx.translate(x,y-6); ctx.scale(1/squash, squash);
   ctx.fillStyle='#5f8a4e';
@@ -444,7 +491,8 @@ function drawFly(d,dt,t){
   d.x+=(d.tx-d.x)*ease; d.y+=(d.ty-d.y)*ease;
   if(Math.hypot(d.tx-d.x,d.ty-d.y)<20){
     // occasionally dip to the surface: tiny ripple + one faint sparkle note
-    if(Math.random()<0.3){ ripple(d.x,d.y,0.35); flit(); }
+    // (dragonflies love the warmth — they barely stir in the cold)
+    if(Math.random()<0.3*warmthNow){ ripple(d.x,d.y,0.35); flit(); }
     d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
   }
   const a=Math.atan2(d.ty-d.y,d.tx-d.x);
@@ -517,6 +565,7 @@ function frame(now){
   // water — colour driven by the real local time of day (moonlit-range cycle)
   const H24=currentHour();
   const sky=skyAt(H24);
+  season=seasonNow(); warmthNow=season.warmth;   // refresh the season for every draw helper
   // outdoor cloud cover greys & flattens the water and hides sun + stars
   const cloud=(weather.cloud||0)/100;
   if(cloud>0.01){
@@ -526,6 +575,12 @@ function frame(now){
     sky.blobA*=1-cloud*0.85;   // overcast → no sun dapple
     sky.glowA*=1-cloud*0.90;   // overcast → no low-sun rake
     sky.night*=1-cloud*0.80;   // overcast → stars veiled
+  }
+  // seasonal tint — a gentle wash of the year's colour over the water
+  if(season.tintA>0.001){
+    const ta=season.tintA*(1-cloud*0.5);
+    sky.top=sky.top.map((v,i)=>v+(season.tint[i]-v)*ta);
+    sky.bot=sky.bot.map((v,i)=>v+(season.tint[i]-v)*ta*0.7);
   }
   const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
   const g=ctx.createLinearGradient(0,0,0,H);
@@ -613,6 +668,33 @@ function frame(now){
     ctx.globalAlpha=n.a; ctx.fillStyle=n.color; ctx.fillText(n.g,n.x,n.y);
   }
   ctx.globalAlpha=1;
+
+  // seasonal foliage — blossom petals drifting in spring, leaves in autumn
+  const fallAmt=Math.max(season.fall, season.petals);
+  if(fallAmt>0.02){
+    const isLeaf=season.fall>=season.petals;
+    const shown=Math.ceil(fallAmt*foliage.length);
+    const lc=season.leaf;
+    for(let i=0;i<shown;i++){ const fp=foliage[i];
+      fp.y += fp.vy*dt*8; fp.sw += dt*fp.sws; fp.rot += fp.rs*dt;
+      fp.x += Math.sin(fp.sw)*0.0008 + (wind/9000);
+      if(fp.y>1.05){ fp.y=-0.05; fp.x=rand(0,1); }
+      if(fp.x>1) fp.x-=1; if(fp.x<0) fp.x+=1;
+      ctx.save(); ctx.translate(fp.x*W, fp.y*H); ctx.rotate(fp.rot);
+      ctx.fillStyle=`rgb(${lc[0]|0},${lc[1]|0},${lc[2]|0})`;
+      if(isLeaf){
+        ctx.globalAlpha=0.72;
+        ctx.beginPath(); ctx.ellipse(0,0,5,2.4,0,0,TAU); ctx.fill();
+        ctx.strokeStyle='rgba(50,34,18,0.3)'; ctx.lineWidth=0.6;
+        ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); ctx.stroke();
+      } else {
+        ctx.globalAlpha=0.62;
+        ctx.beginPath(); ctx.ellipse(0,0,3,1.8,0,0,TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  }
 
   // snow drifting over the pond when it's actually snowing outside
   const snow=weather.snow||0;
