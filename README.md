@@ -23,7 +23,31 @@ Everything is locked to D major pentatonic, so any combination of taps sounds in
 - **Weather** — if a location is available, the pond quietly pulls current conditions and lets the real sky bleed in: cloud cover greys the water and hides the sun and stars, rain stipples the surface with dimples, wind roughens it and stirs the fish, and snow drifts down. It's a soft overlay on the day/night sky, not a mode switch. Silent by design — weather only touches the visuals.
 - **Seasons** — the pond also drifts through the year on the real calendar date. A gentle tint warms or cools the water, the lily pads take on the season's colour (fresh green in spring, lush in summer, olive-brown in autumn, dull in winter), blossom petals fall in spring and leaves in autumn, and the cold quiets the dragonflies and frogs. In spring a little school of **baby fish** appears among the adults (tap near them and they scatter). As winter closes in the pond winds down for the season: the lily pads die back, the frogs settle in to hibernate, and the dragonflies vanish — until only the fish are left, drifting slow and dim beneath a translucent **sheet of ice** that freezes over the surface. Everything eases back to life as it warms. Hemisphere-aware and always gradual, so the pond's identity holds year-round.
 
+- **Discoveries** — rare creatures the pond reveals only under the right real-world conditions, each with its own voice:
+  - **Fireflies** drift and blink on a warm summer night.
+  - A **painted turtle** climbs the shore rocks to bask on a hot day.
+  - A **great blue heron** glides in at dawn and stands stock-still (the fish scatter when it lands and lifts off), with a lonely flute call.
+  - A **mallard** paddles across on an overcast or rainy day, dabbling and leaving a wake.
+  - A **cardinal** — a bright red spot on a cold winter day, perching on the shore and whistling.
+  - **Bats** flit over the water at dusk with faint high ticks.
+  - A **rainbow koi** — a patience reward: a big, shimmering fish that surfaces only after the pond's been running a long while, leaping with a warm chord.
+  - **Swallows** swoop low and skim the surface on a windy day.
+  - A **swan** glides serenely across a still, foggy morning.
+  - A **shooting star** streaks across a clear night, mirrored on the water.
+  - A **rabbit** (light brown) visits the water's edge at dawn or dusk.
+  - A **kingfisher** — a rare flash of blue that perches over the water and plunge-dives.
+
+  The first time you see one, a soft "field guide" card fades its name in (remembered afterwards, so it stays special). More will keep joining the roster.
+
 Audio starts on the first tap (browser autoplay rules); until then the pond is silent but alive.
+
+## Birthdays
+
+On a family birthday, that person's favourite animal comes to the pond all day, with a "Happy birthday, NAME!" card — a private little surprise. The list lives in the `BIRTHDAYS` array near the discoveries in `index.html` (name, month, day, and which animal). Current visitors: a bunny family, a duck family, a breaching narwhal, the blue heron, and a flamingo. Because it reads the real device clock, no setup is needed — it just happens on the day.
+
+## Seeing the discoveries on demand (hidden)
+
+Discoveries wait for their real-world moment (a summer night, a hot afternoon), which is lovely on a wall panel but hard to demo. There's a hidden way to summon them: **press and hold on the stony left shore** (about a second). Each hold summons the next discovery right away — regardless of the weather or season — and replays its card, cycling through the whole roster. It's the test-and-re-show tool; a normal short tap on the shore does nothing special.
 
 ## Weather setup (optional)
 
@@ -47,7 +71,9 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 **M7** — pond layout & flow: lily pads spread across the right side (staggered, low overlap, several flowering); a left-side stony shore (a bed of small stones with big boulders on top, uneven and wrapping a little along the bottom) that casts shade the fish loiter in on a hot day (live temperature); tall, varied wide-leaf water plants along the shore and a few in the open water; and a gentle top-left-waterfall → bottom-right-pump current that the caustics and drifting foliage ride. Adds real pond-edge character.
 
-Deferred: feeding mechanic, creature unlocks, settings UI, optional weather/season sound.
+**M8 (in progress)** — discoveries: twelve (so far) rare creatures revealed by real-world conditions, each with its own voice — fireflies (summer night), painted turtle (hot day), great blue heron (dawn), mallard (overcast/rain), cardinal (winter day), bats (dusk), rainbow koi (patience/long uptime), swallows (windy), swan (still foggy morning), shooting star (clear night), rabbit (dawn/dusk) and kingfisher (a rare diving flash) — with a first-sighting "field guide" card remembered in `localStorage`. A hidden press-and-hold on the shore summons and cycles them on demand for testing / re-showing. The registry makes adding more easy.
+
+Deferred: feeding mechanic, more discoveries, settings UI, optional weather/season sound.
 
 ## Notes
 

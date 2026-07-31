@@ -17,11 +17,23 @@
   #title h1 { font-size:28px; font-weight:normal; letter-spacing:0.35em; margin:0; text-transform:uppercase; }
   #title p { font-size:12px; letter-spacing:0.2em; margin:6px 0 0; opacity:0.55;
     font-family:'Helvetica Neue', Arial, sans-serif; text-transform:uppercase; }
+  /* first-sighting "field guide" card for a discovery */
+  #card {
+    position:fixed; bottom:36px; left:50%;
+    transform:translateX(-50%) translateY(8px);
+    font-family:Georgia,'Times New Roman',serif; color:#e2efe9; text-align:center;
+    pointer-events:none; opacity:0; transition:opacity 1s ease, transform 1s ease;
+  }
+  #card .n { font-size:22px; letter-spacing:0.26em; text-transform:uppercase; }
+  #card .s { font-size:11px; letter-spacing:0.18em; margin-top:5px; opacity:0.6;
+    font-family:'Helvetica Neue', Arial, sans-serif; text-transform:uppercase; }
+  #card.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 <script src="vendor/Tone.js"></script>
 </head>
 <body>
 <div id="title"><h1>Pond Chimes</h1><p>tap the pond to wake it</p></div>
+<div id="card"><div class="n"></div><div class="s"></div></div>
 <canvas id="c"></canvas>
 <script>
 const cv = document.getElementById('c');
@@ -373,7 +385,7 @@ function seasonNow(){
 // shared each frame so the draw helpers can read the season without threading it through
 // dormantNow: 0 = pads & frogs fully present, 1 = died back / hibernating under deep ice
 // heatNow: 0 = mild, 1 = hot day (fish seek the rocks' shade)
-let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false, heatNow=0;
+let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false, heatNow=0, nightNow=0;
 // drifting foliage — leaves in autumn, blossom petals in spring
 const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
 // a little school of fry that appears in spring and fades out by summer
@@ -507,6 +519,588 @@ function drawPlant(pl,t){
   ctx.restore(); ctx.globalAlpha=1;
 }
 
+/* ---------- discoveries -------------------------------------------------
+   Rare creatures the pond reveals only under the right real-world conditions
+   (leaning on the day/night, weather and season systems). A first sighting
+   softly fades a little "field guide" card in. Hidden test / re-show: press
+   and hold on the stony left shore to summon the next one on demand and
+   replay its card, cycling through the roster regardless of conditions.    */
+const cardEl=document.getElementById('card');
+let cardTimer=0;
+function showCard(name,sub){
+  cardEl.querySelector('.n').textContent=name;
+  cardEl.querySelector('.s').textContent=sub;
+  cardEl.classList.add('show'); cardTimer=6;
+}
+function tickCard(dt){ if(cardTimer>0){ cardTimer-=dt; if(cardTimer<=0) cardEl.classList.remove('show'); } }
+let seen; try{ seen=new Set(JSON.parse(localStorage.getItem('pond.seen')||'[]')); }catch(e){ seen=new Set(); }
+function markSeen(id){ if(!seen.has(id)){ seen.add(id); try{ localStorage.setItem('pond.seen',JSON.stringify([...seen])); }catch(e){} } }
+
+// Fireflies — warm summer nights. A drifting, blinking swarm with sparse twinkles.
+const fireflies={
+  id:'fireflies', name:'Fireflies', sub:'a warm summer night',
+  active:false, life:0, age:0, pool:[], spark:1,
+  wants(){ return warmthNow>0.6 && nightNow>0.55; },
+  start(){ this.active=true; this.life=rand(36,66); this.age=0; this.spark=rand(0.4,1.2); this.pool.length=0;
+    for(let i=0;i<20;i++) this.pool.push({ x:rand(0.2,0.96)*W, y:rand(0.18,0.9)*H, a:rand(0,TAU), sp:rand(6,15), ph:rand(0,TAU), bl:rand(0.7,1.7) });
+  },
+  update(dt,t){
+    this.age+=dt; this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1, this.age/3, this.life/3);
+    for(const f of this.pool){
+      f.a += Math.sin(t*0.6+f.ph)*0.03 + rand(-0.05,0.05);
+      f.x += Math.cos(f.a)*f.sp*dt; f.y += Math.sin(f.a)*f.sp*dt;
+      if(f.x<20){f.x=20;f.a=Math.PI-f.a;} if(f.x>W-20){f.x=W-20;f.a=Math.PI-f.a;}
+      if(f.y<18){f.y=18;f.a=-f.a;} if(f.y>H*0.92){f.y=H*0.92;f.a=-f.a;}
+      const gl=Math.max(0, Math.sin(t*f.bl+f.ph)), on=gl*gl*fade;
+      if(on>0.02){
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        const rg=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,16);
+        rg.addColorStop(0,`rgba(214,242,150,${0.5*on})`);
+        rg.addColorStop(0.4,`rgba(170,220,90,${0.26*on})`);
+        rg.addColorStop(1,'rgba(170,220,90,0)');
+        ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(f.x,f.y,16,0,TAU); ctx.fill();
+        ctx.fillStyle=`rgba(240,252,214,${0.9*on})`;
+        ctx.beginPath(); ctx.arc(f.x,f.y,1.6,0,TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    this.spark-=dt;
+    if(this.spark<0){ this.spark=rand(0.6,1.7);
+      if(flySynth) flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(3,SPARKLE.length))], 0.2, undefined, 0.08*fade);
+    }
+  }
+};
+
+// Painted turtle — hot days. Crawls up onto the shore rocks to bask, then slips back.
+const turtle={
+  id:'turtle', name:'Painted turtle', sub:'basking in the sun',
+  active:false, x:0, y:0, tx:0, ty:0, state:'in', timer:0, shift:0,
+  wants(){ return heatNow>0.6 && dormantNow<0.3; },
+  start(){ this.active=true; const yf=rand(0.42,0.86);
+    this.tx=groundRightAt(yf)-6; this.ty=yf*H; this.x=-32; this.y=this.ty+rand(-8,8);
+    this.state='in'; this.timer=rand(30,80); this.shift=rand(3,7);
+  },
+  update(dt,t){
+    if(this.state==='in'){
+      this.x+=(this.tx-this.x)*Math.min(1,dt*0.6); this.y+=(this.ty-this.y)*Math.min(1,dt*0.6);
+      if(Math.abs(this.x-this.tx)<3){ this.state='bask'; if(frogSynth) frogSynth.triggerAttackRelease('D2',0.4,undefined,0.5); }
+    } else if(this.state==='bask'){
+      this.timer-=dt; this.shift-=dt;
+      if(this.shift<0){ this.shift=rand(6,16); if(frogSynth) frogSynth.triggerAttackRelease('E2',0.3,undefined,0.28); }
+      if(this.timer<0) this.state='out';
+    } else { this.x-=34*dt; if(this.x<-42){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#41563e';                                            // legs
+    for(const s of [-1,1]){ ctx.beginPath(); ctx.ellipse(-9,s*8,5,3,0.5*s,0,TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(11,s*7,5,3,-0.5*s,0,TAU); ctx.fill(); }
+    const sh=ctx.createLinearGradient(0,-14,0,14);                      // shell
+    sh.addColorStop(0,'#5c7551'); sh.addColorStop(1,'#31492f');
+    ctx.fillStyle=sh; ctx.beginPath(); ctx.ellipse(0,0,22,15,0,0,TAU); ctx.fill();
+    ctx.strokeStyle='rgba(18,32,16,0.5)'; ctx.lineWidth=1;              // scutes
+    ctx.beginPath(); ctx.ellipse(0,0,13,9,0,0,TAU); ctx.stroke();
+    for(let i=0;i<6;i++){ const a=i/6*TAU+0.3; ctx.beginPath(); ctx.moveTo(Math.cos(a)*13,Math.sin(a)*9); ctx.lineTo(Math.cos(a)*22,Math.sin(a)*15); ctx.stroke(); }
+    ctx.strokeStyle='rgba(198,92,70,0.45)'; ctx.lineWidth=2;            // painted rim
+    ctx.beginPath(); ctx.ellipse(0,0,21,14,0,0,TAU); ctx.stroke();
+    ctx.fillStyle='#41563e'; ctx.beginPath(); ctx.ellipse(24,0,7,5,0,0,TAU); ctx.fill();  // head
+    ctx.fillStyle='#e6b84a'; ctx.beginPath(); ctx.arc(27,-1.5,1.2,0,TAU); ctx.fill();      // eye
+    ctx.restore();
+  }
+};
+
+// send nearby fish darting away from a point (heron landing / taking off)
+function scatterFish(fx,r){ for(const f of fish){ if(Math.abs(f.x-fx)<r){ f.dart=1; f.h=Math.atan2((f.y-H/2)*0.3, f.x-fx)+rand(-0.3,0.3); } } }
+
+// Great blue heron — a still dawn. Glides in, stands motionless, then lifts away.
+const heron={
+  id:'heron', name:'Great blue heron', sub:'a still dawn',
+  active:false, x:0, y:0, fy:0, state:'in', timer:0,
+  wants(){ const h=currentHour(); return h>5 && h<7.6 && dormantNow<0.6; },
+  start(){ this.active=true; this.x=rand(0.24,0.42)*W; this.fy=rand(0.74,0.90)*H;
+    this.y=-120; this.state='in'; this.timer=rand(26,60);
+    scatterFish(this.x,150); if(padSynth) padSynth.triggerAttackRelease('D3',1.6,undefined,0.3);
+  },
+  update(dt,t){
+    if(this.state==='in'){ this.y+=(this.fy-this.y)*Math.min(1,dt*1.1); if(this.fy-this.y<3) this.state='stand'; }
+    else if(this.state==='stand'){ this.timer-=dt; if(this.timer<0){ this.state='out'; scatterFish(this.x,160); if(padSynth) padSynth.triggerAttackRelease('A3',1.2,undefined,0.26); } }
+    else { this.y-=150*dt; this.x-=42*dt; if(this.y<-150){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(2.6,2.6); ctx.lineCap='round';  // herons tower over the pond
+    ctx.strokeStyle='#556b76'; ctx.lineWidth=2.2;                       // legs
+    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-4,-42); ctx.moveTo(5,0); ctx.lineTo(3,-42); ctx.stroke();
+    ctx.fillStyle='rgba(90,116,128,0.7)';                               // tail
+    ctx.beginPath(); ctx.moveTo(-16,-54); ctx.lineTo(-34,-49); ctx.lineTo(-16,-46); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#6b828f';                                            // body
+    ctx.beginPath(); ctx.ellipse(0,-53,22,12,-0.12,0,TAU); ctx.fill();
+    ctx.fillStyle='#5c747f';                                            // wing
+    ctx.beginPath(); ctx.ellipse(-3,-51,15,8,-0.1,0,TAU); ctx.fill();
+    ctx.strokeStyle='#6b828f'; ctx.lineWidth=6;                         // S-neck
+    ctx.beginPath(); ctx.moveTo(12,-59); ctx.quadraticCurveTo(22,-72,13,-84); ctx.quadraticCurveTo(9,-90,18,-94); ctx.stroke();
+    ctx.fillStyle='#6b828f'; ctx.beginPath(); ctx.ellipse(19,-95,6,5,0,0,TAU); ctx.fill(); // head
+    ctx.strokeStyle='#3f5158'; ctx.lineWidth=1.4;                       // crest plume
+    ctx.beginPath(); ctx.moveTo(16,-98); ctx.lineTo(8,-103); ctx.stroke();
+    ctx.fillStyle='#caa24e';                                            // beak
+    ctx.beginPath(); ctx.moveTo(24,-97); ctx.lineTo(40,-94); ctx.lineTo(24,-92); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+};
+
+// Mallard — an overcast or rainy day. Glides across with a wake, dabbles, drifts off.
+const ducks={
+  id:'ducks', name:'Mallard', sub:'an overcast afternoon',
+  active:false, x:0, y:0, tx:0, dir:-1, state:'in', timer:0, wake:0, tip:0,
+  wants(){ return ((weather.cloud||0)>66 || (weather.precip||0)>0.1) && dormantNow<0.7 && nightNow<0.6; },
+  start(){ this.active=true; const fromRight=Math.random()<0.7;
+    this.dir=fromRight?-1:1; this.x=fromRight?W+30:-30; this.y=rand(0.4,0.72)*H;
+    this.tx=fromRight?rand(0.3,0.45)*W:rand(0.55,0.7)*W; this.state='in'; this.timer=rand(16,34); this.wake=0; this.tip=0;
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state==='in'){
+      this.x+=(this.tx-this.x)*Math.min(1,dt*0.4);
+      if(this.wake<0){ this.wake=0.5; ripple(this.x-this.dir*16, this.y+2, 0.3); }
+      if(Math.abs(this.x-this.tx)<8) this.state='dabble';
+    } else if(this.state==='dabble'){ this.timer-=dt; this.tip=Math.max(0,this.tip-dt*2);
+      if(Math.random()<dt*0.5){ this.tip=1; ripple(this.x+this.dir*14,this.y+2,0.35); if(fishSynth) fishSynth.triggerAttackRelease('D3',0.3,undefined,0.13); }
+      if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-40:W+40; }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.5); if(this.x<-30||this.x>W+30){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    const tip=this.tip||0;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir*2.4,2.4); ctx.rotate(tip*0.5); // a duck reads bigger than a fish
+    ctx.fillStyle='#8b959b'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // body
+    ctx.fillStyle='#7a5a3e'; ctx.beginPath(); ctx.ellipse(11,1,7,6,0,0,TAU); ctx.fill();       // breast
+    ctx.strokeStyle='#3a3f42'; ctx.lineWidth=2.5; ctx.lineCap='round';                          // tail curl
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();
+    if(tip<0.3){
+      ctx.fillStyle='#2f6a49'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();   // green head
+      ctx.fillStyle='#eef2ee'; ctx.fillRect(11,-4,7,2);                                          // neck ring
+      ctx.fillStyle='#dcae3f'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();  // bill
+      ctx.fillStyle='#12201a'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill();             // eye
+    }
+    ctx.restore();
+  }
+};
+
+// Cardinal — a bright red spot on a cold winter day. Perches on the shore, whistles, flits.
+const cardinal={
+  id:'cardinal', name:'Cardinal', sub:'a bright spot on a winter day',
+  active:false, x:0, y:0, hopTimer:0, sing:0, life:0,
+  wants(){ return iceNow>0.25 && nightNow<0.4; },
+  perch(){ const yf=rand(0.2,0.85); this.x=groundRightAt(yf)+rand(-2,10); this.y=yf*H-6; },
+  start(){ this.active=true; this.life=rand(26,50); this.perch(); this.hopTimer=rand(4,8); this.sing=rand(1,3); },
+  whistle(){ if(!humSynth) return; const now=Tone.now(), ns=['B6','A6','F#6','E6'];
+    for(let i=0;i<4;i++) humSynth.triggerAttackRelease(ns[i],0.12,now+i*0.09,0.16*(1-i*0.12)); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.sing-=dt;
+    if(this.sing<0){ this.sing=rand(3,7); this.whistle(); }
+    if(this.hopTimer<0){ this.hopTimer=rand(4,9); this.perch(); }
+    const bob=Math.sin(t*3)*1.2;
+    ctx.save(); ctx.translate(this.x,this.y+bob);
+    ctx.fillStyle='#a3241f'; ctx.beginPath(); ctx.moveTo(-4,4); ctx.lineTo(-16,14); ctx.lineTo(-8,6); ctx.closePath(); ctx.fill(); // tail
+    ctx.fillStyle='#c62f2a'; ctx.beginPath(); ctx.ellipse(0,0,10,11,0,0,TAU); ctx.fill();                                          // body
+    ctx.beginPath(); ctx.moveTo(2,-9); ctx.lineTo(8,-18); ctx.lineTo(6,-8); ctx.closePath(); ctx.fill();                            // crest
+    ctx.fillStyle='#1c1513'; ctx.beginPath(); ctx.ellipse(7,-3,4,4,0,0,TAU); ctx.fill();                                           // face mask
+    ctx.fillStyle='#e8913a'; ctx.beginPath(); ctx.moveTo(9,-3); ctx.lineTo(15,-2); ctx.lineTo(9,-1); ctx.closePath(); ctx.fill();   // bill
+    ctx.fillStyle='#22120f'; ctx.beginPath(); ctx.arc(7,-5,0.9,0,TAU); ctx.fill();                                                 // eye
+    ctx.restore();
+  }
+};
+
+// Bats — dusk. A few dark shapes flit erratically over the water with faint ticks.
+const bats={
+  id:'bats', name:'Bats', sub:'the last of the dusk',
+  active:false, life:0, pool:[],
+  wants(){ const h=currentHour(); return h>18.2 && h<20.6 && dormantNow<0.5; },
+  start(){ this.active=true; this.life=rand(24,44); this.pool.length=0;
+    for(let i=0;i<3;i++) this.pool.push({ x:rand(0.2,0.9)*W, y:rand(0.14,0.58)*H, tx:rand(0.2,0.9)*W, ty:rand(0.12,0.58)*H, wing:rand(0,TAU), tick:rand(0.5,2) });
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1, this.life/2);
+    for(const b of this.pool){
+      b.wing+=dt*28;
+      const ease=Math.min(1,dt*3);
+      b.x+=(b.tx-b.x)*ease; b.y+=(b.ty-b.y)*ease;
+      if(Math.hypot(b.tx-b.x,b.ty-b.y)<26){ b.tx=rand(0.15,0.92)*W; b.ty=rand(0.1,0.6)*H;
+        b.tick-=1; if(b.tick<0){ b.tick=rand(1,3); if(humSynth) humSynth.triggerAttackRelease('E6',0.05,undefined,0.05); } }
+      const ang=Math.atan2(b.ty-b.y,b.tx-b.x), wf=Math.abs(Math.sin(b.wing))*0.75+0.25;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang); ctx.globalAlpha=0.82*fade;
+      ctx.fillStyle='#242030';
+      ctx.beginPath(); ctx.ellipse(0,0,3.5,2,0,0,TAU); ctx.fill();     // body
+      const sp=3+8*wf;
+      for(const s of [-1,1]){                                          // scalloped wings
+        ctx.beginPath(); ctx.moveTo(-1,0);
+        ctx.quadraticCurveTo(-7,s*sp,-14,s*sp*0.7);
+        ctx.lineTo(-10,s*sp*0.3);
+        ctx.quadraticCurveTo(-8,s*sp*0.5,-5,s*1.5);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+};
+
+// Rainbow koi — a patience reward: surfaces only after the pond's run a long
+// while, drifting and leaping with a warm chord. (A non-weather trigger.)
+let uptime=0;
+const koi={
+  id:'koi', name:'Rainbow koi', sub:'a long wait, rewarded',
+  active:false, x:0, y:0, h:0, wig:0, life:0, hue:0, leapT:0, leap:0,
+  wants(){ return uptime>240 && dormantNow<0.9; },
+  start(){ this.active=true; this.life=rand(28,50); this.x=rand(0.3,0.7)*W; this.y=rand(0.35,0.75)*H;
+    this.h=rand(0,TAU); this.wig=0; this.leapT=rand(6,12); this.leap=0; uptime=0;
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.wig+=dt*4; this.hue=(t*36)%360;
+    const sp=26;
+    this.h += Math.sin(t*0.4+this.wig*0.1)*0.02 + rand(-0.02,0.02);
+    this.x+=Math.cos(this.h)*sp*dt; this.y+=Math.sin(this.h)*sp*dt;
+    const m=W*0.18; if(this.x<m||this.x>W-40||this.y<40||this.y>H-40){ this.h=Math.atan2(H/2-this.y,W/2-this.x)+rand(-0.5,0.5); }
+    this.leapT-=dt; if(this.leap>0) this.leap-=dt*1.2;
+    if(this.leapT<0 && this.leap<=0){ this.leapT=rand(8,16); this.leap=1; ripple(this.x,this.y,1.2);
+      if(fishSynth) fishSynth.triggerAttackRelease(['D4','F#4','A4'],0.8,undefined,0.4); }
+    const lift=Math.sin(Math.max(0,this.leap)*Math.PI)*24;
+    ctx.save(); ctx.translate(this.x,this.y-lift); ctx.rotate(this.h);
+    const s=36, tw=Math.sin(this.wig)*0.5;
+    const grd=ctx.createLinearGradient(-s,0,s,0);
+    grd.addColorStop(0,`hsl(${this.hue%360},70%,70%)`);
+    grd.addColorStop(0.5,`hsl(${(this.hue+70)%360},75%,72%)`);
+    grd.addColorStop(1,`hsl(${(this.hue+150)%360},70%,66%)`);
+    ctx.globalAlpha=0.92; ctx.filter='blur(0.5px)'; ctx.fillStyle=grd;
+    ctx.beginPath();                                                   // tail
+    ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4,tw*s*0.8-s*0.4,-s*1.6,tw*s);
+    ctx.quadraticCurveTo(-s*1.4,tw*s*0.8+s*0.4,-s*0.7,0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();    // body
+    ctx.fillStyle='rgba(255,255,255,0.55)';                            // pale koi patch
+    ctx.beginPath(); ctx.ellipse(s*0.2,-s*0.05,s*0.34,s*0.2,0,0,TAU); ctx.fill();
+    ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+  }
+};
+
+// Swallows — a windy day. Fast birds swooping low, skimming the surface for insects.
+const swallows={
+  id:'swallows', name:'Swallows', sub:'skimming a windy day',
+  active:false, life:0, pool:[],
+  wants(){ return (weather.wind||0)>17 && dormantNow<0.5 && nightNow<0.5; },
+  start(){ this.active=true; this.life=rand(22,40); this.pool.length=0;
+    for(let i=0;i<3;i++) this.pool.push({ x:rand(0.2,0.9)*W, y:rand(0.3,0.75)*H, tx:rand(0.2,0.9)*W, ty:rand(0.3,0.8)*H, wing:rand(0,TAU), chit:rand(0.5,2) });
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1,this.life/2);
+    for(const b of this.pool){
+      b.wing+=dt*36; const ease=Math.min(1,dt*3.2);
+      b.x+=(b.tx-b.x)*ease; b.y+=(b.ty-b.y)*ease;
+      if(Math.hypot(b.tx-b.x,b.ty-b.y)<26){
+        if(Math.random()<0.4) ripple(b.x,b.y,0.3);
+        b.tx=rand(0.15,0.92)*W; b.ty=rand(0.3,0.82)*H;
+        b.chit-=1; if(b.chit<0){ b.chit=rand(1.5,3.5); if(flySynth) flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(3,SPARKLE.length))],0.06,undefined,0.07); }
+      }
+      const ang=Math.atan2(b.ty-b.y,b.tx-b.x), wf=Math.abs(Math.sin(b.wing));
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang); ctx.globalAlpha=0.85*fade;
+      ctx.fillStyle='#2b3d52';
+      ctx.beginPath(); ctx.ellipse(0,0,5,2,0,0,TAU); ctx.fill();                    // body
+      for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(-1,0);                     // swept wings
+        ctx.quadraticCurveTo(-6,s*(2+7*wf),-13,s*(1+9*wf)); ctx.quadraticCurveTo(-7,s*2,-3,0); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle='#2b3d52'; ctx.lineWidth=1.4;                                  // forked tail
+      ctx.beginPath(); ctx.moveTo(-4,0); ctx.lineTo(-11,-3); ctx.moveTo(-4,0); ctx.lineTo(-11,3); ctx.stroke();
+      ctx.fillStyle='#b5643c'; ctx.beginPath(); ctx.arc(5,0,1.4,0,TAU); ctx.fill();  // rusty throat
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+};
+
+// Swan — a still, foggy morning. Glides serenely, leaving a slow wake.
+const swan={
+  id:'swan', name:'Swan', sub:'a still, foggy morning',
+  active:false, x:0, y:0, tx:0, dir:-1, state:'in', timer:0, wake:0,
+  wants(){ const h=currentHour(); return h>6 && h<10.5 && (weather.cloud||0)>75 && (weather.wind||0)<9 && dormantNow<0.7; },
+  start(){ this.active=true; const fromRight=Math.random()<0.7; this.dir=fromRight?-1:1;
+    this.x=fromRight?W+50:-50; this.y=rand(0.42,0.72)*H; this.tx=fromRight?rand(0.32,0.5)*W:rand(0.5,0.68)*W;
+    this.state='in'; this.timer=rand(20,40); this.wake=0;
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state!=='out'){ this.x+=(this.tx-this.x)*Math.min(1,dt*0.3);
+      if(this.wake<0){ this.wake=0.6; ripple(this.x-this.dir*26,this.y+4,0.4); }
+      if(Math.abs(this.x-this.tx)<10){ this.timer-=dt; if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-50:W+50; } }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.4); if(this.x<-50||this.x>W+50){ this.active=false; return; } }
+    const bob=Math.sin(t*0.8)*1.4;
+    ctx.save(); ctx.translate(this.x,this.y+bob); ctx.scale(this.dir,1);
+    ctx.fillStyle='#eef1f2';
+    ctx.beginPath(); ctx.ellipse(0,0,34,15,0,0,TAU); ctx.fill();                     // body
+    ctx.beginPath(); ctx.ellipse(-6,-6,22,13,0.1,0,TAU); ctx.fill();                 // raised wing
+    ctx.beginPath(); ctx.moveTo(-30,-2); ctx.lineTo(-46,-8); ctx.lineTo(-30,3); ctx.closePath(); ctx.fill(); // tail
+    ctx.strokeStyle='#eef1f2'; ctx.lineWidth=9; ctx.lineCap='round';                 // S-neck
+    ctx.beginPath(); ctx.moveTo(24,-6); ctx.quadraticCurveTo(44,-14,40,-32); ctx.quadraticCurveTo(38,-42,30,-42); ctx.stroke();
+    ctx.fillStyle='#eef1f2'; ctx.beginPath(); ctx.ellipse(29,-42,7,6,0,0,TAU); ctx.fill(); // head
+    ctx.fillStyle='#1c1c1c'; ctx.beginPath(); ctx.ellipse(23,-42,4,4,0,0,TAU); ctx.fill(); // mask
+    ctx.fillStyle='#e08a2a'; ctx.beginPath(); ctx.moveTo(20,-43); ctx.lineTo(11,-41); ctx.lineTo(20,-39); ctx.closePath(); ctx.fill(); // bill
+    ctx.restore();
+  }
+};
+
+// Shooting star — a clear night. A streak across the sky, mirrored on the water.
+const shootingstar={
+  id:'shootingstar', name:'Shooting star', sub:'a clear night',
+  active:false, life:0, sx:0, sy:0, ex:0, ey:0, p:1, gap:0,
+  wants(){ return nightNow>0.6 && (weather.cloud||0)<25; },
+  streak(){ this.sx=rand(0.08,0.7)*W; this.sy=rand(0.04,0.28)*H; const len=rand(0.3,0.5)*W, slope=rand(0.3,0.9);
+    this.ex=this.sx+len; this.ey=this.sy+len*slope; this.p=0;
+    if(humSynth) humSynth.triggerAttackRelease('B6',0.5,undefined,0.13);
+  },
+  start(){ this.active=true; this.life=rand(11,17); this.gap=0.4; this.p=1; },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    if(this.p>=1){ this.gap-=dt; if(this.gap<0){ this.gap=rand(2.5,5); this.streak(); } }
+    if(this.p<1){ this.p=Math.min(1,this.p+dt*1.3);
+      const hx=this.sx+(this.ex-this.sx)*this.p, hy=this.sy+(this.ey-this.sy)*this.p, tp=Math.max(0,this.p-0.28);
+      const txx=this.sx+(this.ex-this.sx)*tp, tyy=this.sy+(this.ey-this.sy)*tp, a=(1-this.p)*0.9+0.12;
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      const g2=ctx.createLinearGradient(txx,tyy,hx,hy);
+      g2.addColorStop(0,'rgba(180,210,255,0)'); g2.addColorStop(1,`rgba(222,236,255,${0.85*a})`);
+      ctx.strokeStyle=g2; ctx.lineWidth=2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(txx,tyy); ctx.lineTo(hx,hy); ctx.stroke();
+      ctx.fillStyle=`rgba(242,248,255,${a})`; ctx.beginPath(); ctx.arc(hx,hy,2.2,0,TAU); ctx.fill();
+      // faint mirror low on the water
+      ctx.strokeStyle=`rgba(200,222,255,${0.18*a})`; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(txx,H-tyy*0.5); ctx.lineTo(hx,H-hy*0.5); ctx.stroke();
+      ctx.restore();
+    }
+  }
+};
+
+// Rabbit — a light brown visitor at the water's edge, dawn or dusk.
+const rabbit={
+  id:'rabbit', name:'Rabbit', sub:"the water's edge",
+  active:false, x:0, y:0, hopTimer:0, life:0, ear:0,
+  wants(){ const h=currentHour(); return ((h>5.4&&h<8) || (h>18&&h<20.6)) && dormantNow<0.75; },
+  perch(){ const yf=rand(0.2,0.9); this.x=groundRightAt(yf)+rand(2,16); this.y=yf*H-4; },
+  start(){ this.active=true; this.life=rand(24,44); this.perch(); this.hopTimer=rand(5,10); this.ear=rand(0,TAU); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.ear+=dt;
+    if(this.hopTimer<0){ this.hopTimer=rand(5,11); this.perch(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
+    const bob=(Math.sin(t*4)>0.6)?1.5:0;                                   // gentle nibble
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();      // body
+    ctx.fillStyle='#e8e2d6'; ctx.beginPath(); ctx.arc(-11,-1,3.5,0,TAU); ctx.fill();          // tail puff
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill(); // head
+    const ew=Math.sin(this.ear*1.3)*0.15;
+    ctx.save(); ctx.translate(10,-8+bob);                                                       // ears
+    for(const s of [-1,1]){ ctx.save(); ctx.rotate(s*0.25+ew*s);
+      ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
+      ctx.fillStyle='#d8b6a0'; ctx.beginPath(); ctx.ellipse(0,-8,1.1,6,0,0,TAU); ctx.fill(); ctx.restore(); }
+    ctx.restore();
+    ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(13,-5+bob,1,0,TAU); ctx.fill();          // eye
+    ctx.fillStyle='#8a5a5a'; ctx.beginPath(); ctx.arc(16,-3+bob,0.9,0,TAU); ctx.fill();         // nose
+    ctx.restore();
+  }
+};
+
+// Kingfisher — a rare flash of blue. Perches over the water, then plunge-dives.
+const kingfisher={
+  id:'kingfisher', name:'Kingfisher', sub:'a rare flash of blue',
+  active:false, x:0, y:0, perchY:0, life:0, diveT:0, diving:0, splashed:false,
+  wants(){ return nightNow<0.4 && dormantNow<0.5 && (weather.cloud||0)<60; },
+  start(){ this.active=true; this.life=rand(20,36); this.x=rand(0.16,0.30)*W; this.perchY=rand(0.26,0.48)*H;
+    this.y=this.perchY; this.diveT=rand(4,9); this.diving=0; this.splashed=false;
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.diveT-=dt;
+    if(this.diving>0){ this.diving-=dt*1.5; if(this.diving<0) this.diving=0; }
+    if(this.diveT<0 && this.diving===0){ this.diveT=rand(5,11); this.diving=1; this.splashed=false;
+      if(flySynth) flySynth.triggerAttackRelease('B6',0.08,undefined,0.16); }
+    const waterY=Math.max(this.perchY+80, H*0.6);
+    if(this.diving>0){ const ph=1-this.diving; this.y=this.perchY+Math.sin(ph*Math.PI)*(waterY-this.perchY);
+      if(!this.splashed && ph>0.5){ this.splashed=true; ripple(this.x,waterY,0.5); } }
+    else this.y=this.perchY;
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#1f7fb0'; ctx.beginPath(); ctx.ellipse(0,0,7,9,0,0,TAU); ctx.fill();    // blue body
+    ctx.beginPath(); ctx.ellipse(3,-8,6,6,0,0,TAU); ctx.fill();                             // big head
+    ctx.fillStyle='#d98436'; ctx.beginPath(); ctx.ellipse(-1,2,5,6,0,0,TAU); ctx.fill();    // orange breast
+    ctx.fillStyle='#16161a'; ctx.beginPath(); ctx.moveTo(8,-8); ctx.lineTo(21,-6); ctx.lineTo(8,-5); ctx.closePath(); ctx.fill(); // beak
+    ctx.fillStyle='#0f2028'; ctx.beginPath(); ctx.arc(5,-9,1.1,0,TAU); ctx.fill();          // eye
+    ctx.restore();
+  }
+};
+
+/* ---- birthday visitors: a favourite animal comes to the pond all day on
+   a birthday, with a "Happy birthday, NAME!" card. These have no natural
+   condition (wants:false) — only the birthday, or the hidden summon.     ---- */
+
+// Jack — a mother duck with three ducklings trailing across the water.
+const duckfamily={
+  id:'duckfamily', name:'Duck family', sub:'', active:false, x:0,y:0,tx:0,dir:-1,state:'in',timer:0,wake:0,babies:[],
+  wants(){ return false; },
+  start(){ this.active=true; const fromRight=Math.random()<0.6; this.dir=fromRight?-1:1;
+    this.x=fromRight?W+40:-40; this.y=rand(0.4,0.7)*H; this.tx=fromRight?rand(0.35,0.5)*W:rand(0.5,0.65)*W;
+    this.state='in'; this.timer=rand(22,44); this.wake=0; this.babies=[]; for(let i=0;i<3;i++) this.babies.push({x:this.x,y:this.y});
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state!=='out'){ this.x+=(this.tx-this.x)*Math.min(1,dt*0.4);
+      if(this.wake<0){ this.wake=0.5; ripple(this.x-this.dir*16,this.y+2,0.3); }
+      if(Math.abs(this.x-this.tx)<10){ this.timer-=dt; if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-60:W+60; } }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.45); if(this.x<-60||this.x>W+60){ this.active=false; return; } }
+    let px=this.x, py=this.y;
+    for(const b of this.babies){ const tx=px-this.dir*26, ty=py+Math.sin(t*3+px*0.05)*3;
+      b.x+=(tx-b.x)*Math.min(1,dt*3); b.y+=(ty-b.y)*Math.min(1,dt*3); px=b.x; py=b.y; }
+    for(const b of this.babies) this.drawDuckling(b.x,b.y);
+    this.drawMama();
+  },
+  drawDuckling(x,y){ ctx.save(); ctx.translate(x,y); ctx.scale(this.dir,1);
+    ctx.fillStyle='#c9a86a'; ctx.beginPath(); ctx.ellipse(0,0,8,5,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#d8ba7a'; ctx.beginPath(); ctx.arc(6,-4,4,0,TAU); ctx.fill();
+    ctx.fillStyle='#8a7a40'; ctx.beginPath(); ctx.ellipse(9,-3,2,1.2,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#3a3320'; ctx.beginPath(); ctx.arc(7,-4.6,0.9,0,TAU); ctx.fill(); ctx.restore(); },
+  drawMama(){ ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir*2.0,2.0);
+    ctx.fillStyle='#8f7a55'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // hen body
+    ctx.fillStyle='#3a6a86'; ctx.beginPath(); ctx.ellipse(-3,-1,6,3,0,0,TAU); ctx.fill();      // wing speculum
+    ctx.strokeStyle='#4a4030'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();    // tail
+    ctx.fillStyle='#6f5c3f'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();     // head
+    ctx.fillStyle='#5c5230'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();   // bill
+    ctx.fillStyle='#20180f'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill(); ctx.restore(); }
+};
+
+// Frankie — a mother rabbit with three kits nibbling along the shore.
+function drawBunny(x,y,sc,bob,ear){
+  ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
+  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();
+  ctx.fillStyle='#e8e2d6'; ctx.beginPath(); ctx.arc(-11,-1,3.5,0,TAU); ctx.fill();
+  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill();
+  const ew=Math.sin(ear*1.3)*0.15;
+  ctx.save(); ctx.translate(10,-8+bob);
+  for(const s of [-1,1]){ ctx.save(); ctx.rotate(s*0.25+ew*s);
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#d8b6a0'; ctx.beginPath(); ctx.ellipse(0,-8,1.1,6,0,0,TAU); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(13,-5+bob,1,0,TAU); ctx.fill();
+  ctx.fillStyle='#8a5a5a'; ctx.beginPath(); ctx.arc(16,-3+bob,0.9,0,TAU); ctx.fill();
+  ctx.restore();
+}
+const bunnyfamily={
+  id:'bunnyfamily', name:'Bunny family', sub:'', active:false, life:0, mama:{x:0,y:0}, babies:[], hopTimer:0, ear:0,
+  wants(){ return false; },
+  placeGroup(){ const yf=rand(0.22,0.82), bx=groundRightAt(yf)+16, by=yf*H-4;
+    this.mama={x:bx,y:by}; this.babies=[
+      {x:bx+18,y:by+13},{x:bx+34,y:by+4},{x:bx+30,y:by+22}]; },
+  start(){ this.active=true; this.life=rand(30,55); this.hopTimer=rand(5,9); this.ear=0; this.placeGroup(); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.ear+=dt;
+    if(this.hopTimer<0){ this.hopTimer=rand(5,10); this.placeGroup(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
+    const bob=(Math.sin(t*4)>0.6)?1.2:0;
+    for(const b of this.babies) drawBunny(b.x,b.y,0.72,bob,this.ear);
+    drawBunny(this.mama.x,this.mama.y,1,bob,this.ear);
+  }
+};
+
+// Matt — a narwhal breaching out of the pond, tusk and all.
+const narwhal={
+  id:'narwhal', name:'Narwhal', sub:'', active:false, life:0, x:0, y0:0, breachT:0, phase:0,
+  wants(){ return false; },
+  start(){ this.active=true; this.life=rand(24,42); this.x=rand(0.4,0.6)*W; this.y0=rand(0.5,0.7)*H; this.breachT=rand(0.3,1); this.phase=0; },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    if(this.phase>0){ this.phase-=dt*0.5; if(this.phase<0) this.phase=0; }
+    else { this.breachT-=dt; if(this.breachT<0){ this.breachT=rand(2.5,5); this.phase=1; this.x=rand(0.35,0.65)*W;
+      ripple(this.x,this.y0,1.5); if(fishSynth) fishSynth.triggerAttackRelease('D2',0.6,undefined,0.4); } }
+    if(this.phase>0){ const ph=1-this.phase, lift=Math.sin(ph*Math.PI)*135, tilt=(ph-0.5)*1.1;
+      if(Math.abs(ph-0.14)<0.02 || Math.abs(ph-0.86)<0.02) ripple(this.x,this.y0,0.8);
+      this.draw(this.x, this.y0-lift, tilt);
+    }
+  },
+  draw(x,y,tilt){
+    ctx.save(); ctx.translate(x,y); ctx.rotate(tilt*0.5);
+    const grd=ctx.createLinearGradient(-16,0,16,0);
+    grd.addColorStop(0,'#5f6d75'); grd.addColorStop(0.5,'#8a97a0'); grd.addColorStop(1,'#5f6d75');
+    ctx.fillStyle=grd; ctx.beginPath();
+    ctx.moveTo(0,44); ctx.quadraticCurveTo(16,20,13,-6); ctx.quadraticCurveTo(11,-26,0,-30);
+    ctx.quadraticCurveTo(-11,-26,-13,-6); ctx.quadraticCurveTo(-16,20,0,44); ctx.fill();       // body
+    ctx.fillStyle='#67757d'; ctx.beginPath(); ctx.moveTo(0,40); ctx.quadraticCurveTo(-16,44,-20,52);
+    ctx.quadraticCurveTo(-6,48,0,46); ctx.quadraticCurveTo(6,48,20,52); ctx.quadraticCurveTo(16,44,0,40); ctx.fill(); // flukes
+    ctx.fillStyle='rgba(40,50,56,0.4)';
+    for(const p of [[-4,10],[5,0],[-2,-8],[6,18],[-6,24]]){ ctx.beginPath(); ctx.arc(p[0],p[1],1.6,0,TAU); ctx.fill(); }
+    ctx.fillStyle='#20282c'; ctx.beginPath(); ctx.arc(5,-20,1.4,0,TAU); ctx.fill();             // eye
+    ctx.save(); ctx.translate(0,-30); ctx.rotate(0.12);                                          // tusk
+    ctx.fillStyle='#ece6d8'; ctx.beginPath(); ctx.moveTo(-2.5,0); ctx.lineTo(2.5,0); ctx.lineTo(1,-72); ctx.lineTo(-1,-72); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(120,110,90,0.5)'; ctx.lineWidth=1;
+    for(let i=0;i<9;i++){ const yy=-i*8; ctx.beginPath(); ctx.moveTo(-2,yy); ctx.lineTo(2,yy-4); ctx.stroke(); }
+    ctx.restore(); ctx.restore();
+  }
+};
+
+// Kate — a flamingo standing in the pond.
+const flamingo={
+  id:'flamingo', name:'Flamingo', sub:'', active:false, x:0, y:0, fy:0, state:'in', timer:0,
+  wants(){ return false; },
+  start(){ this.active=true; this.x=rand(0.3,0.6)*W; this.fy=rand(0.66,0.82)*H; this.y=-160; this.state='in'; this.timer=rand(30,70); },
+  update(dt,t){
+    if(this.state==='in'){ this.y+=(this.fy-this.y)*Math.min(1,dt*1.0); if(this.fy-this.y<3) this.state='stand'; }
+    else if(this.state==='stand'){ this.timer-=dt; if(this.timer<0) this.state='out'; }
+    else { this.y-=130*dt; this.x+=30*dt; if(this.y<-170){ this.active=false; return; } }
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(2.3,2.3); ctx.lineCap='round';
+    ctx.strokeStyle='#e58aa0'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(3,-20); ctx.lineTo(-1,-40); ctx.stroke();       // bent leg
+    ctx.fillStyle='#f2a6bd'; ctx.beginPath(); ctx.ellipse(0,-46,18,11,-0.1,0,TAU); ctx.fill();    // body
+    ctx.beginPath(); ctx.moveTo(-14,-48); ctx.lineTo(-27,-44); ctx.lineTo(-14,-42); ctx.closePath(); ctx.fill(); // tail
+    ctx.strokeStyle='#f2a6bd'; ctx.lineWidth=4.5;                                                 // long S-neck
+    ctx.beginPath(); ctx.moveTo(12,-52); ctx.quadraticCurveTo(32,-60,31,-78); ctx.quadraticCurveTo(30,-92,21,-92); ctx.stroke();
+    ctx.fillStyle='#f2a6bd'; ctx.beginPath(); ctx.ellipse(19,-90,4.5,4,0,0,TAU); ctx.fill();       // head
+    ctx.strokeStyle='#f2a6bd'; ctx.lineWidth=3.4;                                                 // down-hooked bill
+    ctx.beginPath(); ctx.moveTo(16,-89); ctx.quadraticCurveTo(10,-87,11,-83); ctx.stroke();
+    ctx.fillStyle='#1a1414'; ctx.beginPath(); ctx.arc(11,-82,1.4,0,TAU); ctx.fill();               // bill tip
+    ctx.fillStyle='#2a1a1a'; ctx.beginPath(); ctx.arc(20,-91,0.9,0,TAU); ctx.fill();               // eye
+    ctx.restore();
+  }
+};
+
+const DISCOVERIES=[fireflies, turtle, heron, ducks, cardinal, bats, koi, swallows, swan, shootingstar, rabbit, kingfisher,
+                   duckfamily, bunnyfamily, narwhal, flamingo];
+const discById={}; for(const d of DISCOVERIES) discById[d.id]=d;
+// birthdays (month is 1-based). Karen's is the existing heron, kept present all day.
+const BIRTHDAYS=[
+  {name:'Frankie', m:5, d:10, disc:'bunnyfamily'},
+  {name:'Jack',    m:6, d:5,  disc:'duckfamily'},
+  {name:'Matt',    m:6, d:8,  disc:'narwhal'},
+  {name:'Karen',   m:6, d:25, disc:'heron'},
+  {name:'Kate',    m:7, d:2,  disc:'flamingo'}
+];
+function todaysBirthday(){ const d=new Date(), mo=d.getMonth()+1, da=d.getDate(); return BIRTHDAYS.find(b=>b.m===mo && b.d===da)||null; }
+let discoScan=12, cycleIdx=0, holdTimer=0, bdTimer=1.5;
+function activateDisc(d, forced){
+  if(d.active){ showCard(d.name,d.sub); return; }        // already out → just replay the card
+  if(!forced && !d.wants()) return;
+  d.start(); if(forced || !seen.has(d.id)) showCard(d.name,d.sub); markSeen(d.id);
+}
+function summonNext(){ const d=DISCOVERIES[cycleIdx%DISCOVERIES.length]; cycleIdx++; activateDisc(d,true); }
+function updateDiscoveries(dt,t){
+  uptime+=dt;
+  // birthdays: keep the birthday animal coming to the pond all day
+  const bd=todaysBirthday();
+  if(bd && discById[bd.disc]){ const d=discById[bd.disc];
+    if(!d.active){ bdTimer-=dt; if(bdTimer<0){ bdTimer=rand(6,14); d.start(); showCard('Happy birthday, '+bd.name+'!', d.name); markSeen(d.id); } }
+  }
+  discoScan-=dt;                                          // once in a while, if a condition is met, one may appear
+  if(discoScan<0){ discoScan=rand(12,26);
+    for(const d of DISCOVERIES){ if(!d.active && d.wants() && Math.random()<0.5){ activateDisc(d,false); break; } }
+  }
+  for(const d of DISCOVERIES) if(d.active) d.update(dt,t);
+  tickCard(dt);
+}
+
 /* ---------- input ---------- */
 let titleFaded=false;
 function fadeTitle(){
@@ -518,6 +1112,8 @@ setTimeout(fadeTitle, 12000);
 cv.addEventListener('pointerdown', async (e)=>{
   const x=e.clientX, y=e.clientY;
   fadeTitle();
+  // hidden: press & hold on the stony left shore to summon / cycle a discovery
+  if(x < groundRightAt(y/H)+14){ clearTimeout(holdTimer); holdTimer=setTimeout(summonNext, 1150); }
   await initAudio();
   // baby fish scatter away from any tap (side-effect; doesn't consume the tap)
   if(season.young>0.02) for(const b of babies){
@@ -575,6 +1171,10 @@ cv.addEventListener('pointerdown', async (e)=>{
   pluck(y, 0.2);
   ripple(x,y,0.8);
 });
+// cancel the hidden hold if the finger lifts or wanders off the shore
+cv.addEventListener('pointerup',    ()=>clearTimeout(holdTimer));
+cv.addEventListener('pointercancel',()=>clearTimeout(holdTimer));
+cv.addEventListener('pointermove', (e)=>{ if(e.clientX > groundRightAt(e.clientY/H)+44) clearTimeout(holdTimer); });
 
 /* ---------- drawing helpers ---------- */
 function drawRock(rk){
@@ -790,6 +1390,7 @@ function frame(now){
   heatNow = weather.temp!=null
     ? Math.max(0, Math.min(1, (weather.temp-24)/12))
     : warmthNow*(1-(sky.night||0))*0.55;
+  nightNow = sky.night||0;
   const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
   const g=ctx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,rgb(sky.top)); g.addColorStop(1,rgb(sky.bot));
@@ -980,6 +1581,9 @@ function frame(now){
   rocks.forEach(drawRock);
   // tall water plants rise up among the rocks to break up the frame
   plants.forEach(pl=>drawPlant(pl,t));
+
+  // rare discoveries (fireflies, basking turtle, …) drawn over the scene
+  updateDiscoveries(dt,t);
 
   // note glyphs
   ctx.font='20px Georgia, serif';
