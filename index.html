@@ -56,8 +56,8 @@ const TAU=Math.PI*2;
    Fish  : kalimba-ish FM pluck, pitch from Y at tap time.
    Lilies: soft chord swell on toggle; open flowers hold
            their tone in a low drone under everything.
-   Frogs : round bass bloop on landing, pitch from the pad's
-           Y; soft two-pulse croak when idle.
+   Frogs : plucked bass-guitar note on landing, pitch from
+           the pad's Y; soft two-pulse croak when idle.
    Flies : quick high shimmer arp — sparkle on top.
    Hums  : fast tremolo trill, highest register — a rare
            treat when the hummingbird visits a flower.     */
@@ -101,12 +101,13 @@ async function initAudio(){
   }).connect(bus);
   padSynth.volume.value=-16;
 
-  frogSynth=new Tone.MembraneSynth({
-    pitchDecay:0.06, octaves:2.5,
-    oscillator:{type:'sine'},
-    envelope:{attack:0.001, decay:0.5, sustain:0.01, release:0.6}
+  frogSynth=new Tone.PolySynth(Tone.MonoSynth,{
+    oscillator:{type:'fmsquare5', modulationType:'triangle', modulationIndex:2, harmonicity:0.501},
+    filter:{Q:1, type:'lowpass', rolloff:-24},
+    envelope:{attack:0.01, decay:0.4, sustain:0.2, release:0.6},
+    filterEnvelope:{attack:0.005, decay:0.3, sustain:0.35, release:0.7, baseFrequency:60, octaves:3.5}
   }).connect(bus);
-  frogSynth.volume.value=-4;
+  frogSynth.volume.value=-7;
 
   flySynth=new Tone.PolySynth(Tone.FMSynth,{
     harmonicity:12, modulationIndex:4,
@@ -462,16 +463,13 @@ for(let i=0;i<180;i++){
 }
 
 /* ---------- water flow (gentle current) --------------------------------
-   Our pond has a waterfall spilling in at the top-left and a pump drawing
-   from the bottom-right, so the whole surface drifts slowly that way. Kept
-   deliberately faint — the caustic light and any drifting petals/leaves
-   ride the current, a little foam churns where the fall lands, and the pump
-   dimples the far corner — so you feel the movement without losing the
-   still, moonlit calm.                                                     */
+   A pump draws from the bottom-right, so the whole surface drifts slowly
+   that way. Kept deliberately faint — the caustic light and any drifting
+   petals/leaves ride the current, and the pump dimples the far corner —
+   so you feel the movement without losing the still, moonlit calm.        */
 const FLOW={x:0.70, y:0.70};    // unit-ish, toward the bottom-right
-const INLET={x:0.17, y:0.09};   // waterfall lands in the water just off the top-left shore
 const OUTLET={x:0.93, y:0.90};  // pump intake, bottom-right
-let inletAcc=0, pumpAcc=0;
+let pumpAcc=0;
 
 /* ---------- tall wide-leaf water plants -------------------------------
    Emergent clumps (think pickerelweed / canna) poking up among the rocks
@@ -1458,18 +1456,9 @@ function frame(now){
   // ...and the hummingbird pays a rare visit to a flower (only when there are flowers)
   if(!hum){ humTimer-=dt; if(humTimer<0){ if(dormantNow<0.5) spawnHum(); humTimer=rand(45,90); } }
 
-  // water flow: churn where the waterfall lands, dimples at the pump intake
-  inletAcc+=dt;
-  if(inletAcc>0.26){ inletAcc=0; ripples.push({x:INLET.x*W+rand(-16,16), y:INLET.y*H+rand(-12,12), r:2, max:rand(18,32), a:0.26}); }
+  // water flow: faint dimples at the pump intake
   pumpAcc+=dt;
   if(pumpAcc>0.85){ pumpAcc=0; ripples.push({x:OUTLET.x*W+rand(-8,8), y:OUTLET.y*H+rand(-8,8), r:1.5, max:rand(8,14), a:0.15}); }
-  { // foam glow just downstream of the top-left rocks (dims at night with the water)
-    const fx=INLET.x*W+FLOW.x*30, fy=INLET.y*H+FLOW.y*30, fr=52, day=1-(sky.night||0);
-    const pulse=0.09+0.05*Math.sin(t*3)+0.05*day;
-    const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,fr);
-    fg.addColorStop(0,`rgba(214,230,236,${pulse})`); fg.addColorStop(1,'rgba(214,230,236,0)');
-    ctx.fillStyle=fg; ctx.fillRect(fx-fr,fy-fr,fr*2,fr*2);
-  }
 
   // shade the rocks throw on the water (deeper by day) — the fish rest here when it's hot
   {
