@@ -33,15 +33,15 @@ await page.evaluate(() => {
       return orig.apply(this, args);
     };
   };
-  wrap(Tone.PolySynth, 'poly');       // fish, lilies, dragonflies, hummingbird
-  wrap(Tone.MembraneSynth, 'membrane'); // frogs
+  wrap(Tone.PolySynth, 'poly');  // fish, lilies, dragonflies, hummingbird, frogs
 });
 ```
 
-Distinguish poly voices by register: fish D3–F#5 single notes, lily swells are
-note arrays, dragonfly shimmer D5–E6 (3-note runs), hummingbird trill D6–B6
-(8 alternating notes). Frog croak = soft two-pulse membrane pair; hop landing
-= one membrane bloop.
+Every voice is a `PolySynth` now, so distinguish them by register: frogs are
+the only ones in the D2–B2 bass octave, fish are D3–F#5 single notes, lily
+swells are note arrays, dragonfly shimmer is D5–E6 (3-note runs), hummingbird
+trill is D6–B6 (8 alternating notes). Frog croak = two-pulse bass pair; hop
+landing = one bass note.
 
 First `page.mouse.click(...)` counts as the user gesture that starts audio;
 check `Tone.getContext().state === 'running'`.

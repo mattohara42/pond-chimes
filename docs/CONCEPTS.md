@@ -27,7 +27,7 @@ Rationale: Grid Sings solves audio scheduling + touch-on-RAYPODO. Pond Chimes is
 |---|---|---|
 | Fish | Drift underwater; tap → dart + ripple | Marimba/kalimba pluck, pitch from Y position (the melodic core) |
 | Lily pads + water lilies | Static anchors on the surface; tap a lily flower → it opens/closes | Soft sustained chord swell — the harmonic bed. Open flowers hold their chord tone in the drone |
-| Frogs | Sit on lily pads; tap → hop to another pad with a splash | Low, round bass note ("bloop") — the bass voice. Occasional idle croak |
+| Frogs | Sit on lily pads; tap → hop to another pad with a splash | Plucked bass-guitar note — the bass voice. Occasional idle croak |
 | Dragonflies | Skim across the surface in darting paths; tap → quick zigzag | Short high shimmer/flutter arp — sparkle on top |
 | Hummingbirds | Rare visitors hovering at lilies near the edges | Fast tremolo trill, highest register — a treat, not a regular |
 
