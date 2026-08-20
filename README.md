@@ -61,6 +61,8 @@ If none resolve — or there's no network — the pond simply runs on the day/ni
 
 ## Status
 
+**v1.0.0** — the first tagged release, covering everything below. The pond is complete and playable; the deferred items are polish, not missing pieces.
+
 **M3** — the full pond ensemble: fish (melody) + lily pads (harmony) + frogs (bass) + dragonflies (sparkle) + hummingbird (rare treat), with self-playing idle behavior for each, per the approved mockup and concept doc.
 
 **M4** — a day/night cycle driven by the real local clock, in the moonlit palette range.
@@ -79,3 +81,9 @@ Deferred: feeding mechanic, more discoveries, settings UI, optional weather/seas
 
 - `vendor/Tone.js` is the Tone.js v15.1.22 UMD build, vendored so the toy works with no CDN dependency (kiosk-friendly).
 - Sibling projects: The Grid Sings, Chord Garden.
+
+## License
+
+Pond Chimes is released under the [MIT License](LICENSE) — use it, change it, ship it, just keep the copyright notice.
+
+Bundled third-party code: `vendor/Tone.js` is [Tone.js](https://tonejs.github.io/) by Yotam Mann, also MIT licensed — its notice is kept alongside it in `vendor/Tone.js.LICENSE.txt`.
